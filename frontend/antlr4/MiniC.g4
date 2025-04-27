@@ -50,8 +50,11 @@ addExp: unaryExp (addOp unaryExp)*;
 // 加减运算符
 addOp: T_ADD | T_SUB;
 
-// 一元表达式
-unaryExp: primaryExp | T_ID T_L_PAREN realParamList? T_R_PAREN;
+// 一元表达式:单目求负运算、基本表达式
+unaryExp:
+	T_SUB unaryExp
+	| primaryExp
+	| T_ID T_L_PAREN realParamList? T_R_PAREN;
 
 // 基本表达式：括号表达式、整数、左值表达式
 primaryExp: T_L_PAREN expr T_R_PAREN | T_DIGIT | lVal;
@@ -82,7 +85,14 @@ T_INT: 'int';
 T_VOID: 'void';
 
 T_ID: [a-zA-Z_][a-zA-Z0-9_]*;
-T_DIGIT: '0' | [1-9][0-9]*;
+// 无符号整数定义，支持十进制、八进制和十六进制
+//十六进制以 0x 或 0X 开头，后跟十六进制数字 [0-9a-fA-F]+
+//八进制以 0 开头，后跟零个或多个八进制数字 [0-7]*
+
+T_DIGIT:
+	'0' [xX] [0-9a-fA-F]+ // 十六进制
+	| '0' [0-7]* // 八进制，0被八进制匹配
+	| [1-9] [0-9]*; // 十进制
 
 /* 空白符丢弃 */
 WS: [ \r\n\t]+ -> skip;

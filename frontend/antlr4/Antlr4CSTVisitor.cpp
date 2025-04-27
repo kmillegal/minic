@@ -271,9 +271,24 @@ std::any MiniCCSTVisitor::visitAddOp(MiniCParser::AddOpContext * ctx)
 
 std::any MiniCCSTVisitor::visitUnaryExp(MiniCParser::UnaryExpContext * ctx)
 {
-    // 识别文法产生式：unaryExp: primaryExp | T_ID T_L_PAREN realParamList? T_R_PAREN;
+    // 识别文法产生式：unaryExp:T_SUB unaryExp | primaryExp | T_ID T_L_PAREN realParamList ? T_R_PAREN;
 
-    if (ctx->primaryExp()) {
+	if (ctx->T_SUB()) {
+		// 单目求负运算
+        std::any operandResult = visitUnaryExp(ctx->unaryExp()); // 递归调用 visitUnaryExp
+
+        ast_node * operandNode = std::any_cast<ast_node *>(operandResult);
+
+        // 创建一个表示单目求负操作的 AST 节点
+        // 你需要定义一个适合表示单目操作的 AST 节点类型 (例如，AST_UNARY_MINUS)
+        // 这个节点应该包含操作数节点作为子节点或属性
+        // 节点还需要包含源文件位置信息，通常取自运算符 token
+        int64_t lineNo = (int64_t) ctx->T_SUB()->getSymbol()->getLine();
+        // 假设你有一个 helper 函数来创建这种节点
+        ast_node * unaryMinusNode = create_unary_minus_node(operandNode, lineNo);
+
+        return unaryMinusNode;
+    } else if (ctx->primaryExp()) {
         // 普通表达式
         return visitPrimaryExp(ctx->primaryExp());
     } else if (ctx->T_ID()) {

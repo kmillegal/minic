@@ -389,6 +389,22 @@ ast_node * create_var_decl_stmt_node(type_attr & type, var_id_attr & id)
     return stmt_node;
 }
 
+// --- 新增函数实现 ---
+/// @brief 创建单目求负操作的AST节点
+/// @param operand 操作数的AST节点
+/// @param line_no 运算符的行号
+/// @return 创建的单目求负节点
+ast_node * create_unary_minus_node(ast_node * operand, int64_t line_no)
+{
+
+    // 创建单目运算符节点
+    ast_node * node = new ast_node(ast_operator_type::AST_OP_UNARY_MINUS, operand->type, line_no);
+
+    // 设置操作数
+    node->insert_son_node(operand);
+
+    return node;
+}
 ///
 /// @brief 向变量声明语句中追加变量声明
 /// @param stmt_node 变量声明语句
