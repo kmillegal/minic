@@ -50,6 +50,11 @@ void BinaryInstruction::toString(std::string & str)
             // 减法指令，二元运算
             str = getIRName() + " = sub " + src1->getIRName() + "," + src2->getIRName();
             break;
+		case IRInstOperator::IRINST_OP_NEG_I:
+
+			// 负号指令，一元运算
+			str = getIRName() + " = neg " + src1->getIRName();
+			break;
 
         default:
             // 未知指令

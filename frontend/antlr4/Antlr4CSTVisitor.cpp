@@ -268,21 +268,18 @@ std::any MiniCCSTVisitor::visitAddOp(MiniCParser::AddOpContext * ctx)
         return ast_operator_type::AST_OP_SUB;
     }
 }
-
+// 新增
 std::any MiniCCSTVisitor::visitUnaryExp(MiniCParser::UnaryExpContext * ctx)
 {
     // 识别文法产生式：unaryExp:T_SUB unaryExp | primaryExp | T_ID T_L_PAREN realParamList ? T_R_PAREN;
 
-	if (ctx->T_SUB()) {
-		// 单目求负运算
+    if (ctx->T_SUB()) {
+        // 单目求负运算
         std::any operandResult = visitUnaryExp(ctx->unaryExp()); // 递归调用 visitUnaryExp
 
         ast_node * operandNode = std::any_cast<ast_node *>(operandResult);
 
         // 创建一个表示单目求负操作的 AST 节点
-        // 你需要定义一个适合表示单目操作的 AST 节点类型 (例如，AST_UNARY_MINUS)
-        // 这个节点应该包含操作数节点作为子节点或属性
-        // 节点还需要包含源文件位置信息，通常取自运算符 token
         int64_t lineNo = (int64_t) ctx->T_SUB()->getSymbol()->getLine();
         // 假设你有一个 helper 函数来创建这种节点
         ast_node * unaryMinusNode = create_unary_minus_node(operandNode, lineNo);
@@ -322,7 +319,11 @@ std::any MiniCCSTVisitor::visitPrimaryExp(MiniCParser::PrimaryExpContext * ctx)
         // 无符号整型字面量
         // 识别 primaryExp: T_DIGIT
 
-        uint32_t val = (uint32_t) stoull(ctx->T_DIGIT()->getText());
+        std::string text = ctx->T_DIGIT()->getText(); // 获取数字的文本表示
+        uint64_t val_ull = 0; // 使用 uint64_t 来存储 stoull 的结果，以防超出 uint32_t 范围
+        val_ull = std::stoull(text, nullptr, 0); // stoull 自动检测进制
+        uint32_t val = static_cast<uint32_t>(val_ull);
+        // uint32_t val = (uint32_t) stoull(ctx->T_DIGIT()->getText());
         int64_t lineNo = (int64_t) ctx->T_DIGIT()->getSymbol()->getLine();
         node = ast_node::New(digit_int_attr{val, lineNo});
     } else if (ctx->lVal()) {

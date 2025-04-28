@@ -57,12 +57,12 @@ static bool gShowSymbol = false;
 ///
 /// @brief 前端分析器，默认选Flex和Bison
 ///
-static bool gFrontEndFlexBison = true;
+static bool gFrontEndFlexBison = false;
 
 ///
 /// @brief 前端分析器Antlr4，是否选中
 ///
-static bool gFrontEndAntlr4 = false;
+static bool gFrontEndAntlr4 = true;
 
 ///
 /// @brief 前端分析器用递归下降分析法，是否选中

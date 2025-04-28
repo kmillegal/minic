@@ -90,9 +90,8 @@ enum class ast_operator_type : int {
     AST_OP_SUB,
 
     // TODO 抽象语法树其它内部节点运算符追加
-	/// @brief 单目运算符-
-    AST_OP_UNARY_MINUS,
-
+	/// @brief 一元运算符-
+	AST_OP_MINUS,
     /// @brief 最大标识符，表示非法运算符
     AST_OP_MAX,
 };
@@ -282,3 +281,10 @@ ast_node * create_var_decl_stmt_node(type_attr & type, var_id_attr & id);
 /// @return ast_node* 变量声明语句节点
 ///
 ast_node * add_var_decl_node(ast_node * stmt_node, var_id_attr & id);
+
+//新增
+/// @brief 创建单目求负操作的AST节点
+/// @param operand 操作数的AST节点
+/// @param line_no 运算符的行号
+/// @return 创建的单目求负节点
+ast_node * create_unary_minus_node(ast_node * operand, int64_t line_no);

@@ -37,7 +37,7 @@
 			"type": "cppdbg",
 			"request": "launch",
 			"program": "${workspaceFolder}/build/minic",
-			"args": ["-S", "-D", "-I", "-o", "tests/test2-2.ir", "tests/test2-2.c"],
+			"args": ["-S", "-A", "-I", "-o", "tests/test_minus.ir", "tests/test_minus.c"],
 			// 程序的入口（main函数的入口）是否停止
 			"stopAtEntry": true,
 			"cwd": "${workspaceFolder}",
@@ -76,7 +76,7 @@
 			"type": "cppdbg",
 			"request": "launch",
 			"program": "${workspaceFolder}/build/minic",
-			"args": ["-S", "-A", "-T", "-o", "tests/test2-2.png", "tests/test2-1.c"],
+			"args": ["-S", "-A", "-T", "-o", "tests/test_minus.png", "tests/test_minus.c"],
 			// 程序的入口（main函数的入口）是否停止
 			"stopAtEntry": true,
 			"cwd": "${workspaceFolder}",
@@ -115,7 +115,7 @@
 			"type": "lldb",
 			"request": "launch",
 			"program": "${workspaceFolder}/build/minic",
-			"args": ["-S", "-A", "-o", "tests/test2-2.s", "tests/test2-2.c"],
+			"args": ["-S", "-A", "-o", "tests/test_minus.s", "tests/test_minus.c"],
 			"cwd": "${workspaceFolder}",
 			// 不需要编译时可注释掉
 			"preLaunchTask": "CMake: build"

@@ -47,6 +47,7 @@ IRGenerator::IRGenerator(ast_node * _root, Module * _module) : root(_root), modu
     /* 表达式运算， 加减 */
     ast2ir_handlers[ast_operator_type::AST_OP_SUB] = &IRGenerator::ir_sub;
     ast2ir_handlers[ast_operator_type::AST_OP_ADD] = &IRGenerator::ir_add;
+    ast2ir_handlers[ast_operator_type::AST_OP_MINUS] = &IRGenerator::ir_minus;
 
     /* 语句 */
     ast2ir_handlers[ast_operator_type::AST_OP_ASSIGN] = &IRGenerator::ir_assign;
@@ -453,6 +454,39 @@ bool IRGenerator::ir_sub(ast_node * node)
     node->val = subInst;
 
     return true;
+}
+
+/// @brief 求负运算AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_minus(ast_node * node)
+{
+	ast_node * src1_node = node->sons[0];
+
+	// 一元减法节点，直接计算左节点
+
+	// 一元减法的操作数
+	ast_node * left = ir_visit_ast_node(src1_node);
+	if (!left) {
+		// 某个变量没有定值
+		return false;
+	}
+
+	// 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
+
+	BinaryInstruction * minusInst = new BinaryInstruction(module->getCurrentFunction(),
+														IRInstOperator::IRINST_OP_NEG_I,
+														left->val,
+														nullptr,
+														IntegerType::getTypeInt());
+
+	// 创建临时变量保存IR的值，以及线性IR指令
+	node->blockInsts.addInst(left->blockInsts);
+	node->blockInsts.addInst(minusInst);
+
+	node->val = minusInst;
+
+	return true;
 }
 
 /// @brief 赋值AST节点翻译成线性中间IR

@@ -49,10 +49,12 @@ void User::addOperand(Value * val)
     auto use = new Use(val, this);
 
     // 增加到操作数中
+    if (val != nullptr) {
     operands.push_back(use);
 
     // 该val被使用
     val->addUse(use);
+	}
 }
 
 ///

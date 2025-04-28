@@ -398,7 +398,7 @@ ast_node * create_unary_minus_node(ast_node * operand, int64_t line_no)
 {
 
     // 创建单目运算符节点
-    ast_node * node = new ast_node(ast_operator_type::AST_OP_UNARY_MINUS, operand->type, line_no);
+    ast_node * node = new ast_node(ast_operator_type::AST_OP_MINUS, operand->type, line_no);
 
     // 设置操作数
     node->insert_son_node(operand);
