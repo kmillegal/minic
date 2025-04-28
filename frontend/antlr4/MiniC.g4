@@ -44,11 +44,17 @@ statement:
 // 表达式文法 expr : AddExp 表达式目前只支持加法与减法运算
 expr: addExp;
 
-// 加减表达式
-addExp: unaryExp (addOp unaryExp)*;
+// 加减表达式 (二目运算符 + 和 -) 操作数现在是乘法表达式 (mulExp)，优先级低于乘法、除法、求余
+addExp: mulExp (addOp mulExp)*;
 
 // 加减运算符
 addOp: T_ADD | T_SUB;
+
+// 乘法、除法、求余表达式 (二目运算符 *, /, %) 操作数是 unaryExp，优先级低于单目运算符
+mulExp: unaryExp (mulOp unaryExp)*;
+
+// 乘法、除法、求余运算符 (二目)
+mulOp: T_MUL | T_DIV | T_MOD;
 
 // 一元表达式:单目求负运算、基本表达式
 unaryExp:
@@ -78,6 +84,9 @@ T_COMMA: ',';
 
 T_ADD: '+';
 T_SUB: '-';
+T_MUL: '*';
+T_DIV: '/';
+T_MOD: '%';
 
 // 要注意关键字同样也属于T_ID，因此必须放在T_ID的前面，否则会识别成T_ID
 T_RETURN: 'return';
@@ -85,9 +94,7 @@ T_INT: 'int';
 T_VOID: 'void';
 
 T_ID: [a-zA-Z_][a-zA-Z0-9_]*;
-// 无符号整数定义，支持十进制、八进制和十六进制
-//十六进制以 0x 或 0X 开头，后跟十六进制数字 [0-9a-fA-F]+
-//八进制以 0 开头，后跟零个或多个八进制数字 [0-7]*
+// 无符号整数定义，支持十进制、八进制和十六进制 十六进制以 0x 或 0X 开头，后跟十六进制数字 [0-9a-fA-F]+ 八进制以 0 开头，后跟零个或多个八进制数字 [0-7]*
 
 T_DIGIT:
 	'0' [xX] [0-9a-fA-F]+ // 十六进制
