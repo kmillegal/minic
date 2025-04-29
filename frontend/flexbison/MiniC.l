@@ -49,8 +49,28 @@
 "="         { return T_ASSIGN; }
 "+"         { return T_ADD; }
 "-"         { return T_SUB; }
+"*"         { return T_MUL; }
+"/"         { return T_DIV; }
+"%"         { return T_MOD; }
 
+ /* 十六进制: 以 0x 或 0X 开头，后跟一个或多个十六进制数字 */
+0[xX][0-9a-fA-F]+ {
+                // 词法识别无符号十六进制数
+                yylval.integer_num.val = (uint32_t)strtol(yytext, (char **)NULL, 16);
+                yylval.integer_num.lineno = yylineno;
+                return T_DIGIT;
+            }
 
+ /* 八进制: 以 0 开头，后跟一个或多个八进制数字 (0-7) */
+ /* 注意：单独的 "0" 匹配下面的十进制规则，strtol(0, NULL, 10) == 0，是正确的。 */
+0[0-7]+ {
+                // 词法识别无符号八进制数
+                yylval.integer_num.val = (uint32_t)strtol(yytext, (char **)NULL, 8);
+                yylval.integer_num.lineno = yylineno;
+                return T_DIGIT;
+            }
+
+ /* 十进制: 以 0-9 开头，后跟一个或多个十进制数字 (0-9) */
 "0"|[1-9][0-9]*	{
                 // 词法识别无符号整数，注意对于负数，则需要识别为负号和无符号数两个Token
                 yylval.integer_num.val = (uint32_t)strtol(yytext, (char **)NULL, 10);

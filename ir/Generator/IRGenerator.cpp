@@ -123,7 +123,7 @@ ast_node * IRGenerator::ir_visit_ast_node(ast_node * node)
 bool IRGenerator::ir_default(ast_node * node)
 {
     // 未知的节点
-    printf("Unkown node(%d)\n", (int) node->node_type);
+    printf("Unknown node(%d)\n", (int) node->node_type);
     return true;
 }
 

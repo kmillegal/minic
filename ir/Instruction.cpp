@@ -38,7 +38,7 @@ IRInstOperator Instruction::getOp()
 void Instruction::toString(std::string & str)
 {
     // 未知指令
-    str = "Unkown IR Instruction";
+    str = "Unknown IR Instruction";
 }
 
 /// @brief 是否是Dead指令
