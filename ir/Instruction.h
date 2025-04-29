@@ -52,6 +52,12 @@ enum class IRInstOperator : std::int8_t {
     /* 后续可追加其他的IR指令 */
     /// @brief 整数的求负指令，一元运算
     IRINST_OP_NEG_I,
+    /// @brief 整数的乘法指令，二元运算
+    IRINST_OP_MUL_I,
+    /// @brief 整数的除法指令，二元运算
+    IRINST_OP_DIV_I,
+    /// @brief 整数的取余指令，二元运算
+    IRINST_OP_MOD_I,
 
     /// @brief 最大指令码，也是无效指令
     IRINST_OP_MAX

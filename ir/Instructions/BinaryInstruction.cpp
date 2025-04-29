@@ -54,7 +54,22 @@ void BinaryInstruction::toString(std::string & str)
 
 			// 负号指令，一元运算
 			str = getIRName() + " = neg " + src1->getIRName();
+            break;
+        case IRInstOperator::IRINST_OP_MUL_I:
+
+			// 乘法指令，二元运算
+			str = getIRName() + " = mul " + src1->getIRName() + "," + src2->getIRName();
+            break;
+        case IRInstOperator::IRINST_OP_DIV_I:
+
+			// 除法指令，二元运算
+			str = getIRName() + " = div " + src1->getIRName() + "," + src2->getIRName();
 			break;
+        case IRInstOperator::IRINST_OP_MOD_I:
+
+            // 取余指令，二元运算
+            str = getIRName() + " = mod " + src1->getIRName() + "," + src2->getIRName();
+            break;
 
         default:
             // 未知指令
