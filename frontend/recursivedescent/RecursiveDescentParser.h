@@ -27,7 +27,7 @@ enum RDTokenType {
 
     T_DIGIT,
     T_INT,
-	T_ID,
+    T_ID,
 
     T_L_PAREN,
     T_R_PAREN,
@@ -37,9 +37,12 @@ enum RDTokenType {
     T_COMMA,
 
     T_RETURN,
-	T_ASSIGN,
-	T_ADD,
+    T_ASSIGN,
+    T_ADD,
     T_SUB,
+    T_MUL,
+    T_DIV,
+    T_MOD,
 };
 
 /// @brief 词法与语法分析数据交互的Token的值类型
