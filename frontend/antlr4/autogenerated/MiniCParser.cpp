@@ -1,5 +1,5 @@
 
-// Generated from MiniC.g4 by ANTLR 4.12.0
+// Generated from MiniC.g4 by ANTLR 4.13.2
 
 
 #include "MiniCVisitor.h"
@@ -37,10 +37,19 @@ struct MiniCParserStaticData final {
 };
 
 ::antlr4::internal::OnceFlag minicParserOnceFlag;
-MiniCParserStaticData *minicParserStaticData = nullptr;
+#if ANTLR4_USE_THREAD_LOCAL_CACHE
+static thread_local
+#endif
+std::unique_ptr<MiniCParserStaticData> minicParserStaticData = nullptr;
 
 void minicParserInitialize() {
+#if ANTLR4_USE_THREAD_LOCAL_CACHE
+  if (minicParserStaticData != nullptr) {
+    return;
+  }
+#else
   assert(minicParserStaticData == nullptr);
+#endif
   auto staticData = std::make_unique<MiniCParserStaticData>(
     std::vector<std::string>{
       "compileUnit", "funcDef", "block", "blockItemList", "blockItem", "varDecl", 
@@ -114,7 +123,7 @@ void minicParserInitialize() {
   for (size_t i = 0; i < count; i++) { 
     staticData->decisionToDFA.emplace_back(staticData->atn->getDecisionState(i), i);
   }
-  minicParserStaticData = staticData.release();
+  minicParserStaticData = std::move(staticData);
 }
 
 }
@@ -1547,5 +1556,9 @@ MiniCParser::LValContext* MiniCParser::lVal() {
 }
 
 void MiniCParser::initialize() {
+#if ANTLR4_USE_THREAD_LOCAL_CACHE
+  minicParserInitialize();
+#else
   ::antlr4::internal::call_once(minicParserOnceFlag, minicParserInitialize);
+#endif
 }

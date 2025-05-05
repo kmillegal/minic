@@ -49,6 +49,10 @@ InstSelectorArm32::InstSelectorArm32(vector<Instruction *> & _irCode,
 
     translator_handlers[IRInstOperator::IRINST_OP_ADD_I] = &InstSelectorArm32::translate_add_int32;
     translator_handlers[IRInstOperator::IRINST_OP_SUB_I] = &InstSelectorArm32::translate_sub_int32;
+    translator_handlers[IRInstOperator::IRINST_OP_MUL_I] = &InstSelectorArm32::translate_mul_int32;
+    translator_handlers[IRInstOperator::IRINST_OP_DIV_I] = &InstSelectorArm32::translate_div_int32;
+    translator_handlers[IRInstOperator::IRINST_OP_MOD_I] = &InstSelectorArm32::translate_mod_int32;
+    translator_handlers[IRInstOperator::IRINST_OP_NEG_I] = &InstSelectorArm32::translate_neg_int32;
 
     translator_handlers[IRInstOperator::IRINST_OP_FUNC_CALL] = &InstSelectorArm32::translate_call;
     translator_handlers[IRInstOperator::IRINST_OP_ARG] = &InstSelectorArm32::translate_arg;
@@ -64,10 +68,17 @@ InstSelectorArm32::~InstSelectorArm32()
 void InstSelectorArm32::run()
 {
     for (auto inst: ir) {
-
         // 逐个指令进行翻译
         if (!inst->isDead()) {
             translate(inst);
+
+            // !!! 新增逻辑 !!!
+            // 如果当前翻译的是 EXIT 指令，则当前函数的翻译完成，退出循环
+            if (inst->getOp() == IRInstOperator::IRINST_OP_EXIT) {
+                // Optionally add a comment to clearly mark function end in assembly
+                iloc.comment("--- End of Function ---");
+                break; // 退出循环，停止翻译当前函数后续的IR指令
+            }
         }
     }
 }
@@ -219,6 +230,52 @@ void InstSelectorArm32::translate_assign(Instruction * inst)
     }
 }
 
+// 用于翻译单目求负指令 (例如: result = -operand)
+void InstSelectorArm32::translate_neg_int32(Instruction * inst)
+{
+    // 单目求负指令: result = -operand
+    Value * result = inst;
+    Value * operand = inst->getOperand(0);
+
+    int32_t operand_reg_no = operand->getRegId();
+    int32_t result_reg_no = inst->getRegId();
+    int32_t load_operand_reg_no;
+    int32_t load_result_reg_no;
+
+    if (operand_reg_no == -1) {
+
+        load_operand_reg_no = simpleRegisterAllocator.Allocate(operand);
+
+
+        iloc.load_var(load_operand_reg_no, operand);
+    } else {
+
+        load_operand_reg_no = operand_reg_no;
+    }
+
+    if (result_reg_no == -1) {
+
+        load_result_reg_no = simpleRegisterAllocator.Allocate(result);
+    } else {
+
+        load_result_reg_no = result_reg_no;
+    }
+
+
+    iloc.inst("rsb",
+              PlatformArm32::regName[load_result_reg_no],
+              PlatformArm32::regName[load_operand_reg_no],
+              "#0");
+
+    if (result_reg_no == -1) {
+
+        iloc.store_var(load_result_reg_no, result, ARM32_TMP_REG_NO);
+    }
+
+    simpleRegisterAllocator.free(operand); // 释放操作数使用的寄存器
+    simpleRegisterAllocator.free(result);  // 释放结果使用的寄存器
+}
+
 /// @brief 二元操作指令翻译成ARM32汇编
 /// @param inst IR指令
 /// @param operator_name 操作码
@@ -301,6 +358,98 @@ void InstSelectorArm32::translate_add_int32(Instruction * inst)
 void InstSelectorArm32::translate_sub_int32(Instruction * inst)
 {
     translate_two_operator(inst, "sub");
+}
+
+/// @brief 整数乘法指令翻译成ARM32汇编
+/// @param inst IR指令
+void InstSelectorArm32::translate_mul_int32(Instruction * inst)
+{
+	translate_two_operator(inst, "mul");
+}
+
+/// @brief 整数除法指令翻译成ARM32汇编 (假设支持 sdiv)
+/// @param inst IR指令
+void InstSelectorArm32::translate_div_int32(Instruction * inst)
+{
+    // Assumes target ARM32 architecture supports the sdiv instruction for signed integer division.
+    // sdiv Rd, Rn, Rm: Rd = Rn / Rm (signed)
+    // If sdiv is not available, this would need to be replaced with a call to a software division helper function (like
+    // __aeabi_idiv).
+    translate_two_operator(inst, "sdiv");
+}
+
+/// @brief 整数取模指令翻译成ARM32汇编 (a % b = a - (a / b) * b)
+/// @param inst IR指令
+void InstSelectorArm32::translate_mod_int32(Instruction * inst)
+{
+    // Modulo: result = arg1 % arg2
+    // Implemented as: result = arg1 - (arg1 / arg2) * arg2
+    Value * result = inst;              // Instruction itself is the result
+    Value * arg1 = inst->getOperand(0); // Dividend (a)
+    Value * arg2 = inst->getOperand(1); // Divisor (b)
+
+    // Need registers for arg1, arg2, result, and intermediate steps (a/b, (a/b)*b)
+
+    // 1. Allocate registers for arg1, arg2, and final result using the standard pattern
+    int32_t r_arg1 = simpleRegisterAllocator.Allocate(arg1);     // Get reg for arg1 (a)
+    int32_t r_arg2 = simpleRegisterAllocator.Allocate(arg2);     // Get reg for arg2 (b)
+    int32_t r_result = simpleRegisterAllocator.Allocate(result); // Get reg for final result (a % b)
+
+    // 2. Load arg1 and arg2 into their registers if they were memory or constants
+    bool arg1_needs_load = (arg1->getRegId() == -1);
+    bool arg2_needs_load = (arg2->getRegId() == -1);
+    bool res_needs_store = (result->getRegId() == -1);
+
+    if (arg1_needs_load) {
+        iloc.load_var(r_arg1, arg1);
+    }
+    if (arg2_needs_load) {
+        iloc.load_var(r_arg2, arg2);
+    }
+
+    // 3. Allocate temporary registers for intermediate calculations (a/b and (a/b)*b)
+    // These intermediate values do not correspond to specific IR Value* outside this instruction.
+    // We need raw temporary registers managed by the allocator.
+    int32_t r_div_tmp = simpleRegisterAllocator.Allocate(); // Temp for a / b
+    int32_t r_mul_tmp = simpleRegisterAllocator.Allocate(); // Temp for (a / b) * b
+
+    // 4. Perform the division: r_div_tmp = r_arg1 / r_arg2 (a / b)
+    iloc.inst("sdiv",
+              PlatformArm32::regName[r_div_tmp], // Result of division
+              PlatformArm32::regName[r_arg1],    // Dividend (a)
+              PlatformArm32::regName[r_arg2]);   // Divisor (b)
+
+    // 5. Perform the multiplication: r_mul_tmp = r_div_tmp * r_arg2 ((a / b) * b)
+    iloc.inst("mul",
+              PlatformArm32::regName[r_mul_tmp], // Result of multiplication
+              PlatformArm32::regName[r_div_tmp], // (a / b)
+              PlatformArm32::regName[r_arg2]);   // b
+
+    // Free the temporary register used for the division result (a/b) as it's no longer needed
+    simpleRegisterAllocator.free(r_div_tmp);
+
+    // 6. Perform the subtraction: r_result = r_arg1 - r_mul_tmp (a - (a / b) * b)
+    iloc.inst("sub",
+              PlatformArm32::regName[r_result],   // Final result register/temp
+              PlatformArm32::regName[r_arg1],     // Original dividend (a)
+              PlatformArm32::regName[r_mul_tmp]); // (a / b) * b
+
+    // Free the temporary register used for the multiplication result ((a/b)*b)
+    simpleRegisterAllocator.free(r_mul_tmp);
+
+    // 7. Store the final result if it was originally a memory variable
+    if (res_needs_store) {
+        // Store value from r_result (temp) to result (memory location)
+        // Use ARM32_TMP_REG_NO as a scratch register for address calculation if needed by iloc.store_var
+        iloc.store_var(r_result, result, ARM32_TMP_REG_NO);
+    }
+
+    // 8. Free registers associated with arg1, arg2, and result for THIS instruction's context.
+    // This releases temporaries allocated for memory/constant values and indicates RegVariable usage ends for this
+    // instruction.
+    simpleRegisterAllocator.free(arg1);
+    simpleRegisterAllocator.free(arg2);
+    simpleRegisterAllocator.free(result);
 }
 
 /// @brief 函数调用指令翻译成ARM32汇编

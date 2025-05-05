@@ -10,7 +10,7 @@
 			// 调试的名称，可修改
 			"name": "Debug minic Antlr4 Grammar",
 			// 文法解析的输入文件
-			"input": "tests/test_mul.c",
+			"input": "tests/test_digit.c",
 			// 分析树可视化，也就是具体语法树AST
 			"visualParseTree": true,
 			// 文本输出分析树
@@ -115,7 +115,7 @@
 			"type": "lldb",
 			"request": "launch",
 			"program": "${workspaceFolder}/build/minic",
-			"args": ["-S", "-A", "-o", "tests/test_mul.s", "tests/test_mul.c"],
+			"args": ["-S", "-A", "-o", "tests/test_div.s", "tests/test_div.c"],
 			"cwd": "${workspaceFolder}",
 			// 不需要编译时可注释掉
 			"preLaunchTask": "CMake: build"
@@ -124,7 +124,7 @@
 			"name": "Qemu Debug ARM32",
 			"type": "cppdbg",
 			"request": "launch",
-			"program": "${workspaceFolder}/tests/test2-2",
+			"program": "${workspaceFolder}/tests/test_div",
 			"args": [],
 			// 程序的入口（main函数的入口）是否停止
 			"stopAtEntry": true,

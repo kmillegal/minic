@@ -1,5 +1,5 @@
 
-// Generated from MiniC.g4 by ANTLR 4.12.0
+// Generated from MiniC.g4 by ANTLR 4.13.2
 
 
 #include "MiniCLexer.h"
@@ -42,10 +42,19 @@ struct MiniCLexerStaticData final {
 };
 
 ::antlr4::internal::OnceFlag miniclexerLexerOnceFlag;
-MiniCLexerStaticData *miniclexerLexerStaticData = nullptr;
+#if ANTLR4_USE_THREAD_LOCAL_CACHE
+static thread_local
+#endif
+std::unique_ptr<MiniCLexerStaticData> miniclexerLexerStaticData = nullptr;
 
 void miniclexerLexerInitialize() {
+#if ANTLR4_USE_THREAD_LOCAL_CACHE
+  if (miniclexerLexerStaticData != nullptr) {
+    return;
+  }
+#else
   assert(miniclexerLexerStaticData == nullptr);
+#endif
   auto staticData = std::make_unique<MiniCLexerStaticData>(
     std::vector<std::string>{
       "T_L_PAREN", "T_R_PAREN", "T_SEMICOLON", "T_L_BRACE", "T_R_BRACE", 
@@ -118,7 +127,7 @@ void miniclexerLexerInitialize() {
   for (size_t i = 0; i < count; i++) { 
     staticData->decisionToDFA.emplace_back(staticData->atn->getDecisionState(i), i);
   }
-  miniclexerLexerStaticData = staticData.release();
+  miniclexerLexerStaticData = std::move(staticData);
 }
 
 }
@@ -164,5 +173,9 @@ const atn::ATN& MiniCLexer::getATN() const {
 
 
 void MiniCLexer::initialize() {
+#if ANTLR4_USE_THREAD_LOCAL_CACHE
+  miniclexerLexerInitialize();
+#else
   ::antlr4::internal::call_once(miniclexerLexerOnceFlag, miniclexerLexerInitialize);
+#endif
 }
