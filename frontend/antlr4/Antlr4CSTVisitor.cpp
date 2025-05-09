@@ -334,7 +334,6 @@ std::any MiniCCSTVisitor::visitUnaryExp(MiniCParser::UnaryExpContext * ctx)
 
         // 创建一个表示单目求负操作的 AST 节点
         int64_t lineNo = (int64_t) ctx->T_SUB()->getSymbol()->getLine();
-        // 假设你有一个 helper 函数来创建这种节点
         ast_node * unaryMinusNode = create_unary_minus_node(operandNode, lineNo);
 
         return unaryMinusNode;

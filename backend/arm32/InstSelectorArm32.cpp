@@ -371,10 +371,6 @@ void InstSelectorArm32::translate_mul_int32(Instruction * inst)
 /// @param inst IR指令
 void InstSelectorArm32::translate_div_int32(Instruction * inst)
 {
-    // Assumes target ARM32 architecture supports the sdiv instruction for signed integer division.
-    // sdiv Rd, Rn, Rm: Rd = Rn / Rm (signed)
-    // If sdiv is not available, this would need to be replaced with a call to a software division helper function (like
-    // __aeabi_idiv).
     translate_two_operator(inst, "sdiv");
 }
 
@@ -383,19 +379,16 @@ void InstSelectorArm32::translate_div_int32(Instruction * inst)
 void InstSelectorArm32::translate_mod_int32(Instruction * inst)
 {
     // Modulo: result = arg1 % arg2
-    // Implemented as: result = arg1 - (arg1 / arg2) * arg2
-    Value * result = inst;              // Instruction itself is the result
+
+    Value * result = inst;
     Value * arg1 = inst->getOperand(0); // Dividend (a)
     Value * arg2 = inst->getOperand(1); // Divisor (b)
 
-    // Need registers for arg1, arg2, result, and intermediate steps (a/b, (a/b)*b)
 
-    // 1. Allocate registers for arg1, arg2, and final result using the standard pattern
-    int32_t r_arg1 = simpleRegisterAllocator.Allocate(arg1);     // Get reg for arg1 (a)
-    int32_t r_arg2 = simpleRegisterAllocator.Allocate(arg2);     // Get reg for arg2 (b)
-    int32_t r_result = simpleRegisterAllocator.Allocate(result); // Get reg for final result (a % b)
+    int32_t r_arg1 = simpleRegisterAllocator.Allocate(arg1);
+    int32_t r_arg2 = simpleRegisterAllocator.Allocate(arg2);
+    int32_t r_result = simpleRegisterAllocator.Allocate(result);
 
-    // 2. Load arg1 and arg2 into their registers if they were memory or constants
     bool arg1_needs_load = (arg1->getRegId() == -1);
     bool arg2_needs_load = (arg2->getRegId() == -1);
     bool res_needs_store = (result->getRegId() == -1);
@@ -407,46 +400,35 @@ void InstSelectorArm32::translate_mod_int32(Instruction * inst)
         iloc.load_var(r_arg2, arg2);
     }
 
-    // 3. Allocate temporary registers for intermediate calculations (a/b and (a/b)*b)
-    // These intermediate values do not correspond to specific IR Value* outside this instruction.
-    // We need raw temporary registers managed by the allocator.
+
     int32_t r_div_tmp = simpleRegisterAllocator.Allocate(); // Temp for a / b
     int32_t r_mul_tmp = simpleRegisterAllocator.Allocate(); // Temp for (a / b) * b
 
-    // 4. Perform the division: r_div_tmp = r_arg1 / r_arg2 (a / b)
-    iloc.inst("sdiv",
-              PlatformArm32::regName[r_div_tmp], // Result of division
-              PlatformArm32::regName[r_arg1],    // Dividend (a)
-              PlatformArm32::regName[r_arg2]);   // Divisor (b)
 
-    // 5. Perform the multiplication: r_mul_tmp = r_div_tmp * r_arg2 ((a / b) * b)
+    iloc.inst("sdiv",
+              PlatformArm32::regName[r_div_tmp],
+              PlatformArm32::regName[r_arg1],
+              PlatformArm32::regName[r_arg2]);
+
+
     iloc.inst("mul",
-              PlatformArm32::regName[r_mul_tmp], // Result of multiplication
+              PlatformArm32::regName[r_mul_tmp],
               PlatformArm32::regName[r_div_tmp], // (a / b)
               PlatformArm32::regName[r_arg2]);   // b
 
-    // Free the temporary register used for the division result (a/b) as it's no longer needed
     simpleRegisterAllocator.free(r_div_tmp);
 
-    // 6. Perform the subtraction: r_result = r_arg1 - r_mul_tmp (a - (a / b) * b)
     iloc.inst("sub",
-              PlatformArm32::regName[r_result],   // Final result register/temp
-              PlatformArm32::regName[r_arg1],     // Original dividend (a)
+              PlatformArm32::regName[r_result],
+              PlatformArm32::regName[r_arg1],
               PlatformArm32::regName[r_mul_tmp]); // (a / b) * b
 
-    // Free the temporary register used for the multiplication result ((a/b)*b)
     simpleRegisterAllocator.free(r_mul_tmp);
 
-    // 7. Store the final result if it was originally a memory variable
     if (res_needs_store) {
-        // Store value from r_result (temp) to result (memory location)
-        // Use ARM32_TMP_REG_NO as a scratch register for address calculation if needed by iloc.store_var
         iloc.store_var(r_result, result, ARM32_TMP_REG_NO);
     }
 
-    // 8. Free registers associated with arg1, arg2, and result for THIS instruction's context.
-    // This releases temporaries allocated for memory/constant values and indicates RegVariable usage ends for this
-    // instruction.
     simpleRegisterAllocator.free(arg1);
     simpleRegisterAllocator.free(arg2);
     simpleRegisterAllocator.free(result);
