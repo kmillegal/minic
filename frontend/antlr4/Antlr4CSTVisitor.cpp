@@ -193,9 +193,9 @@ std::any MiniCCSTVisitor::visitReturnStatement(MiniCParser::ReturnStatementConte
 /// @param ctx CST上下文
 std::any MiniCCSTVisitor::visitExpr(MiniCParser::ExprContext * ctx)
 {
-    // 识别产生式：expr: addExp;
+    // 识别产生式：expr: relExp;
 
-    return visitAddExp(ctx->addExp());
+    return visitRelExp(ctx->relExp());
 }
 
 std::any MiniCCSTVisitor::visitAssignStatement(MiniCParser::AssignStatementContext * ctx)
@@ -219,6 +219,61 @@ std::any MiniCCSTVisitor::visitBlockStatement(MiniCParser::BlockStatementContext
     return visitBlock(ctx->block());
 }
 
+std::any MiniCCSTVisitor::visitRelExp(MiniCParser::RelExpContext * ctx)
+{
+    // 识别文法产生式：relExp : addExp (relOp addExp)*;
+
+	if (ctx->relOp().empty()) {
+		// 没有addOp运算符，则说明闭包识别为0，只识别了第一个非终结符mulExp
+		return visitAddExp(ctx->addExp()[0]);
+	}
+
+	ast_node *left, *right;
+
+	// 存在addOp运算符，自
+	auto opsCtxVec = ctx->relOp();
+
+	// 有操作符，肯定会进循环，使得right设置正确的值
+	for (int k = 0; k < (int) opsCtxVec.size(); k++) {
+
+		// 获取运算符
+		ast_operator_type op = std::any_cast<ast_operator_type>(visitRelOp(opsCtxVec[k]));
+
+		if (k == 0) {
+
+			// 左操作数
+			left = std::any_cast<ast_node *>(visitAddExp(ctx->addExp()[k]));
+		}
+
+		// 右操作数
+		right = std::any_cast<ast_node *>(visitAddExp(ctx->addExp()[k + 1]));
+
+		// 新建结点作为下一个运算符的右操作符
+		left = ast_node::New(op, left, right, nullptr);
+	}
+
+	return left;
+}
+
+
+std::any MiniCCSTVisitor::visitRelOp(MiniCParser::RelOpContext * ctx)
+{
+    // 识别的文法产生式：relOp : T_EQ | T_NE | T_LE | T_GE | T_LT | T_GT
+    if (ctx->T_EQ()) {
+		return ast_operator_type::AST_OP_EQ;
+	} else if (ctx->T_NE()) {
+		return ast_operator_type::AST_OP_NE;
+	} else if (ctx->T_LE()) {
+		return ast_operator_type::AST_OP_LE;
+	} else if (ctx->T_GE()) {
+		return ast_operator_type::AST_OP_GE;
+	} else if (ctx->T_LT()) {
+		return ast_operator_type::AST_OP_LT;
+	} else {
+		return ast_operator_type::AST_OP_GT;
+	}
+
+}
 std::any MiniCCSTVisitor::visitAddExp(MiniCParser::AddExpContext * ctx)
 {
     // 识别的文法产生式：addExp : mulExp (addOp mulExp)*;

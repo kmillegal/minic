@@ -93,8 +93,27 @@ enum class ast_operator_type : int {
     /// @brief 一元运算符-
     AST_OP_MINUS,
 
+    /// @brief 二元运算符!=
+    AST_OP_EQ,
+
+    /// @brief 二元运算符==
+    AST_OP_NE,
+
+    /// @brief 二元运算符<=
+    AST_OP_LE,
+
+    /// @brief 二元运算符<
+    AST_OP_LT,
+
+    /// @brief 二元运算符>=
+    AST_OP_GE,
+
+    /// @brief 二元运算符>
+    AST_OP_GT,
+
     /// @brief 二元运算符*
     AST_OP_MUL,
+
     /// @brief 二元运算符/
     AST_OP_DIV,
     /// @brief 二元运算符%

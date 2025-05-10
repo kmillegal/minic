@@ -41,8 +41,14 @@ statement:
 	| block								# blockStatement
 	| expr? T_SEMICOLON					# expressionStatement;
 
-// 表达式文法 expr : AddExp 表达式目前只支持加法与减法运算
-expr: addExp;
+// 表达式文法 expr : RelExp 表达式现在以关系表达式为入口
+expr: relExp;
+
+// 关系表达式 (二目运算符 <, <=, >, >=, ==, !=) 操作数是加减表达式 (addExp)，优先级低于加减
+relExp: addExp (relOp addExp)*;
+
+// 关系运算符
+relOp: T_EQ | T_NE | T_LE | T_LT | T_GE | T_GT;
 
 // 加减表达式 (二目运算符 + 和 -) 操作数现在是乘法表达式 (mulExp)，优先级低于乘法、除法、求余
 addExp: mulExp (addOp mulExp)*;
@@ -80,6 +86,12 @@ T_L_BRACE: '{';
 T_R_BRACE: '}';
 
 T_ASSIGN: '=';
+T_EQ: '==';
+T_NE: '!=';
+T_LE: '<=';
+T_LT: '<';
+T_GE: '>=';
+T_GT: '>';
 T_COMMA: ',';
 
 T_ADD: '+';

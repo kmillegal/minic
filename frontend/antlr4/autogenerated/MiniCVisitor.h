@@ -45,6 +45,10 @@ public:
 
     virtual std::any visitExpr(MiniCParser::ExprContext *context) = 0;
 
+    virtual std::any visitRelExp(MiniCParser::RelExpContext *context) = 0;
+
+    virtual std::any visitRelOp(MiniCParser::RelOpContext *context) = 0;
+
     virtual std::any visitAddExp(MiniCParser::AddExpContext *context) = 0;
 
     virtual std::any visitAddOp(MiniCParser::AddOpContext *context) = 0;

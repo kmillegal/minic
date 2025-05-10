@@ -92,6 +92,20 @@ protected:
     std::any visitBlockStatement(MiniCParser::BlockStatementContext * ctx) override;
 
     ///
+    /// @brief 非终结符RelExp的分析
+    /// @param ctx CST上下文
+    /// @return std::any AST的节点
+    ///
+    std::any visitRelExp(MiniCParser::RelExpContext * ctx) override;
+
+    ///
+    /// @brief 非终结符RelOp的分析
+    /// @param ctx CST上下文
+    /// @return std::any AST的节点
+    ///
+    std::any visitRelOp(MiniCParser::RelOpContext * ctx) override;
+
+    ///
     /// @brief 非终结符AddExp的分析
     /// @param ctx CST上下文
     /// @return std::any AST的节点
