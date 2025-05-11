@@ -112,9 +112,23 @@ string getNodeName(ast_node * astnode)
         case ast_operator_type::AST_OP_GT:
             nodeName = ">";
             break;
+        case ast_operator_type::AST_OP_NOT:
+            nodeName = "!";
+            break;
+        case ast_operator_type::AST_OP_AND:
+            nodeName = "&&";
+            break;
+        case ast_operator_type::AST_OP_OR:
+            nodeName = "||";
+            break;
+
         case ast_operator_type::AST_OP_IF:
             nodeName = "if";
-			break;
+            break;
+        case ast_operator_type::AST_OP_WHILE:
+			nodeName = "while";
+            break;
+
         default:
             nodeName = "unknown";
             break;

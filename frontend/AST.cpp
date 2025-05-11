@@ -405,13 +405,28 @@ ast_node * create_unary_minus_node(ast_node * operand, int64_t line_no)
 
     return node;
 }
-///
-/// @brief 向变量声明语句中追加变量声明
-/// @param stmt_node 变量声明语句
-/// @param id 变量的名字
-/// @return ast_node* 变量声明语句节点
-///
-ast_node * add_var_decl_node(ast_node * stmt_node, var_id_attr & id)
+
+/// @brief 创建单目非操作的AST节点
+/// @param operand 操作数的AST节点
+/// @param line_no 运算符的行号
+/// @return 创建的单目非节点
+ast_node * create_unary_not_node(ast_node * operand, int64_t line_no)
+{
+    // 创建单目运算符节点
+    ast_node * node = new ast_node(ast_operator_type::AST_OP_NOT, operand->type, line_no);
+    // 设置操作数
+    node->insert_son_node(operand);
+
+    return node;
+}
+
+    ///
+    /// @brief 向变量声明语句中追加变量声明
+    /// @param stmt_node 变量声明语句
+    /// @param id 变量的名字
+    /// @return ast_node* 变量声明语句节点
+    ///
+    ast_node * add_var_decl_node(ast_node * stmt_node, var_id_attr & id)
 {
     // 创建变量定义节点
     ast_node * decl_node = createVarDeclNode(stmt_node->type, id);

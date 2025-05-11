@@ -45,7 +45,17 @@ public:
 
     virtual std::any visitIfStatement(MiniCParser::IfStatementContext *context) = 0;
 
+    virtual std::any visitWhileStatement(MiniCParser::WhileStatementContext *context) = 0;
+
     virtual std::any visitExpr(MiniCParser::ExprContext *context) = 0;
+
+    virtual std::any visitLorExp(MiniCParser::LorExpContext *context) = 0;
+
+    virtual std::any visitLandExp(MiniCParser::LandExpContext *context) = 0;
+
+    virtual std::any visitEqExp(MiniCParser::EqExpContext *context) = 0;
+
+    virtual std::any visitEqOp(MiniCParser::EqOpContext *context) = 0;
 
     virtual std::any visitRelExp(MiniCParser::RelExpContext *context) = 0;
 

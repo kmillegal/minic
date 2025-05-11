@@ -72,11 +72,6 @@ protected:
     /// @return AST的节点
     std::any visitReturnStatement(MiniCParser::ReturnStatementContext * ctx) override;
 
-    /// @brief 非终结运算符expr的遍历
-    /// @param ctx CST上下文
-    /// @return AST的节点
-    std::any visitExpr(MiniCParser::ExprContext * ctx) override;
-
     ///
     /// @brief 内部产生的非终结符assignStatement的分析
     /// @param ctx CST上下文
@@ -98,6 +93,46 @@ protected:
     ///
     std::any visitIfStatement(MiniCParser::IfStatementContext * ctx) override;
 
+    ///
+    /// @brief 内部产生的非终结符WhileStatement的分析
+    /// @param ctx CST上下文
+    /// @return std::any AST的节点
+    ///
+    std::any visitWhileStatement(MiniCParser::WhileStatementContext * ctx) override;
+
+    ///
+    /// @brief 非终结运算符expr的遍历
+    /// @param ctx CST上下文
+    /// @return AST的节点
+    std::any visitExpr(MiniCParser::ExprContext * ctx) override;
+
+    ///
+    /// @brief 非终结符LorExp的分析
+    /// @param ctx CST上下文
+    /// @return std::any AST的节点
+    ///
+    std::any visitLorExp(MiniCParser::LorExpContext * ctx) override;
+
+	///
+	/// @brief 非终结符LorOp的分析
+	/// @param ctx CST上下文
+	/// @return std::any AST的节点
+	///
+    std::any visitLandExp(MiniCParser::LandExpContext * ctx) override;
+
+    ///
+    /// @brief 非终结符LandOp的分析
+    /// @param ctx CST上下文
+    /// @return std::any AST的节点
+    ///
+    std::any visitEqExp(MiniCParser::EqExpContext * ctx) override;
+
+    ///
+    /// @brief 非终结符EqOp的分析
+    /// @param ctx CST上下文
+    /// @return std::any AST的节点
+    ///
+    std::any visitEqOp(MiniCParser::EqOpContext * ctx) override;
 
     ///
     /// @brief 非终结符RelExp的分析

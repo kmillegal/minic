@@ -120,8 +120,20 @@ enum class ast_operator_type : int {
     /// @brief 二元运算符%
     AST_OP_MOD,
 
+    /// @brief 逻辑与运算符
+    AST_OP_AND,
+
+    /// @brief 逻辑或运算符
+    AST_OP_OR,
+
+    /// @brief 逻辑非运算符
+    AST_OP_NOT,
+
     /// @brief IF语句运算符
     AST_OP_IF,
+
+    /// @brief WHILE语句运算符
+    AST_OP_WHILE,
 
     /// @brief 最大标识符，表示非法运算符
     AST_OP_MAX,
@@ -319,3 +331,9 @@ ast_node * add_var_decl_node(ast_node * stmt_node, var_id_attr & id);
 /// @param line_no 运算符的行号
 /// @return 创建的单目求负节点
 ast_node * create_unary_minus_node(ast_node * operand, int64_t line_no);
+
+/// @brief 创建单目非操作的AST节点
+/// @param operand 操作数的AST节点
+/// @param line_no 运算符的行号
+/// @return 创建的单目非节点
+ast_node * create_unary_not_node(ast_node * operand, int64_t line_no);

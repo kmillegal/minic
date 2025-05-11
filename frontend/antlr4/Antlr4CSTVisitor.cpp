@@ -15,6 +15,7 @@
 /// </table>
 ///
 
+#include <any>
 #include <string>
 
 #include "Antlr4CSTVisitor.h"
@@ -163,6 +164,7 @@ std::any MiniCCSTVisitor::visitStatement(MiniCParser::StatementContext * ctx)
     // | block  # blockStatement
     // | expr ? T_SEMICOLON #expressionStatement;
     // | T_IF T_L_PAREN expr T_R_PAREN statement (T_ELSE statement)? # ifStatement
+    // | T_WHILE T_L_PAREN expr T_R_PAREN statement # whileStatement;
     if (Instanceof(assignCtx, MiniCParser::AssignStatementContext *, ctx)) {
         return visitAssignStatement(assignCtx);
     } else if (Instanceof(returnCtx, MiniCParser::ReturnStatementContext *, ctx)) {
@@ -173,6 +175,8 @@ std::any MiniCCSTVisitor::visitStatement(MiniCParser::StatementContext * ctx)
         return visitExpressionStatement(exprCtx);
     } else if (Instanceof(exprCtx, MiniCParser::IfStatementContext *, ctx)) {
 		return visitIfStatement(exprCtx);
+    } else if (Instanceof(exprCtx, MiniCParser::WhileStatementContext *, ctx)) {
+		return visitWhileStatement(exprCtx);
 	}
 
     return nullptr;
@@ -193,37 +197,6 @@ std::any MiniCCSTVisitor::visitReturnStatement(MiniCParser::ReturnStatementConte
     return create_contain_node(ast_operator_type::AST_OP_RETURN, exprNode);
 }
 
-/// @brief 非终结运算符statement中的IfStatement的遍历
-/// @param ctx CST上下文
-std::any MiniCCSTVisitor::visitIfStatement(MiniCParser::IfStatementContext * ctx)
-{
-	// 识别的文法产生式：ifStatement : T_IF T_L_PAREN expr T_R_PAREN statement (T_ELSE statement)?;
-
-	// 非终结符，表达式expr遍历
-	auto exprNode = std::any_cast<ast_node *>(visitExpr(ctx->expr()));
-
-	// 遍历if语句块
-	auto ifBlockNode = std::any_cast<ast_node *>(visitStatement(ctx->statement(0)));
-
-	ast_node * elseBlockNode = nullptr;
-
-	if (ctx->statement().size() > 1) {
-		// 遍历else语句块
-		elseBlockNode = std::any_cast<ast_node *>(visitStatement(ctx->statement(1)));
-	}
-
-	// 创建if节点，其孩子为Expr和if语句块和else语句块
-	return create_contain_node(ast_operator_type::AST_OP_IF, exprNode, ifBlockNode, elseBlockNode);
-}
-
-/// @brief 非终结运算符expr的遍历
-/// @param ctx CST上下文
-std::any MiniCCSTVisitor::visitExpr(MiniCParser::ExprContext * ctx)
-{
-    // 识别产生式：expr: relExp;
-
-    return visitRelExp(ctx->relExp());
-}
 
 std::any MiniCCSTVisitor::visitAssignStatement(MiniCParser::AssignStatementContext * ctx)
 {
@@ -246,6 +219,159 @@ std::any MiniCCSTVisitor::visitBlockStatement(MiniCParser::BlockStatementContext
     return visitBlock(ctx->block());
 }
 
+/// @brief 非终结运算符statement中的IfStatement的遍历
+/// @param ctx CST上下文
+std::any MiniCCSTVisitor::visitIfStatement(MiniCParser::IfStatementContext * ctx)
+{
+    // 识别的文法产生式：ifStatement : T_IF T_L_PAREN expr T_R_PAREN statement (T_ELSE statement)?;
+
+    // 非终结符，表达式expr遍历
+    auto exprNode = std::any_cast<ast_node *>(visitExpr(ctx->expr()));
+
+    // 遍历if语句块
+    auto ifBlockNode = std::any_cast<ast_node *>(visitStatement(ctx->statement(0)));
+
+    ast_node * elseBlockNode = nullptr;
+
+    if (ctx->statement().size() > 1) {
+        // 遍历else语句块
+        elseBlockNode = std::any_cast<ast_node *>(visitStatement(ctx->statement(1)));
+    }
+
+    // 创建if节点，其孩子为Expr和if语句块和else语句块
+    return create_contain_node(ast_operator_type::AST_OP_IF, exprNode, ifBlockNode, elseBlockNode);
+}
+
+/// @brief 非终结运算符statement中的WhileStatement的遍历
+/// @param ctx CST上下文
+std::any MiniCCSTVisitor::visitWhileStatement(MiniCParser::WhileStatementContext * ctx)
+{
+	//识别的文法产生式：whileStatement : T_WHILE T_L_PAREN expr T_R_PAREN statement;
+
+	//非终结符，表达式expr遍历
+	auto exprNode = std::any_cast<ast_node *>(visitExpr(ctx->expr()));
+
+	// 遍历while语句块
+	auto whileBlockNode = std::any_cast<ast_node *>(visitStatement(ctx->statement()));
+
+    // 创建while节点，其孩子为Expr和while语句块
+	return create_contain_node(ast_operator_type::AST_OP_WHILE, exprNode, whileBlockNode);
+}
+
+
+/// @brief 非终结运算符expr的遍历
+/// @param ctx CST上下文
+std::any MiniCCSTVisitor::visitExpr(MiniCParser::ExprContext * ctx)
+{
+    // 识别产生式：expr: lorExp;
+
+    return visitLorExp(ctx->lorExp());
+}
+
+/// @brief 非终结运算符lorExp的遍历
+/// @param ctx CST上下文
+std::any MiniCCSTVisitor::visitLorExp(MiniCParser::LorExpContext * ctx)
+{
+	// 识别产生式：lorExp: landExp (T_OR landExp)*;
+
+	if (ctx->landExp().size() == 1) {
+		return visitLandExp(ctx->landExp()[0]);
+	}
+
+	ast_node * left, * right;
+
+	auto opsCtxVec = ctx->landExp();
+
+	for (int k = 0; k < (int) opsCtxVec.size(); k++) {
+
+		if (k == 0) {
+			left = std::any_cast<ast_node *>(visitLandExp(opsCtxVec[k]));
+		}
+
+		right = std::any_cast<ast_node *>(visitLandExp(opsCtxVec[k + 1]));
+
+		left = ast_node::New(ast_operator_type::AST_OP_OR, left, right, nullptr);
+	}
+
+	return left;
+}
+
+/// @brief 非终结运算符landExp的遍历
+/// @param ctx CST上下文
+std::any MiniCCSTVisitor::visitLandExp(MiniCParser::LandExpContext * ctx)
+{
+	// 识别产生式：landExp: eqExp (T_AND eqExp)*;
+
+	if (ctx->eqExp().size() == 1) {
+		return visitEqExp(ctx->eqExp()[0]);
+	}
+
+	ast_node * left, * right;
+
+	auto opsCtxVec = ctx->eqExp();
+
+	for (int k = 0; k < (int) opsCtxVec.size(); k++) {
+
+		if (k == 0) {
+			left = std::any_cast<ast_node *>(visitEqExp(opsCtxVec[k]));
+		}
+
+		right = std::any_cast<ast_node *>(visitEqExp(opsCtxVec[k + 1]));
+
+		left = ast_node::New(ast_operator_type::AST_OP_AND, left, right, nullptr);
+	}
+
+	return left;
+}
+
+/// @brief 非终结运算符eqExp的遍历
+/// @param ctx CST上下文
+std::any MiniCCSTVisitor::visitEqExp(MiniCParser::EqExpContext * ctx)
+{
+	// 识别的文法产生式：eqExp : relExp (eqOp relExp)*;
+
+	if (ctx->relExp().size() == 1) {
+		return visitRelExp(ctx->relExp()[0]);
+	}
+
+	ast_node * left, * right;
+
+	auto opsCtxVec = ctx->eqOp();
+
+    // 有操作符，肯定会进循环，使得right设置正确的值
+    for (int k = 0; k < (int) opsCtxVec.size(); k++) {
+        // 获取运算符
+
+        ast_operator_type op = std::any_cast<ast_operator_type>(visitEqOp(opsCtxVec[k]));
+        if (k == 0) {
+			// 左操作数
+			left = std::any_cast<ast_node *>(visitRelExp(ctx->relExp()[k]));
+		}
+
+		right = std::any_cast<ast_node *>(visitRelExp(ctx->relExp()[k + 1]));
+
+		// 新建结点作为下一个运算符的右操作符
+		left = ast_node::New(op, left, right, nullptr);
+	}
+
+	return left;
+}
+
+/// @brief 非终结运算符eqOp的遍历
+/// @param ctx CST上下文
+std::any MiniCCSTVisitor::visitEqOp(MiniCParser::EqOpContext * ctx)
+{
+	// 识别的文法产生式：eqOp : T_EQ | T_NE
+
+	if (ctx->T_EQ()) {
+		return ast_operator_type::AST_OP_EQ;
+	} else {
+		return ast_operator_type::AST_OP_NE;
+	}
+}
+
+/// @brief 非终结运算符relExp的遍历
+/// @param ctx CST上下文
 std::any MiniCCSTVisitor::visitRelExp(MiniCParser::RelExpContext * ctx)
 {
     // 识别文法产生式：relExp : addExp (relOp addExp)*;
@@ -257,7 +383,7 @@ std::any MiniCCSTVisitor::visitRelExp(MiniCParser::RelExpContext * ctx)
 
 	ast_node *left, *right;
 
-	// 存在addOp运算符，自
+	// 存在addOp运算符
 	auto opsCtxVec = ctx->relOp();
 
 	// 有操作符，肯定会进循环，使得right设置正确的值
@@ -285,12 +411,8 @@ std::any MiniCCSTVisitor::visitRelExp(MiniCParser::RelExpContext * ctx)
 
 std::any MiniCCSTVisitor::visitRelOp(MiniCParser::RelOpContext * ctx)
 {
-    // 识别的文法产生式：relOp : T_EQ | T_NE | T_LE | T_GE | T_LT | T_GT
-    if (ctx->T_EQ()) {
-		return ast_operator_type::AST_OP_EQ;
-	} else if (ctx->T_NE()) {
-		return ast_operator_type::AST_OP_NE;
-	} else if (ctx->T_LE()) {
+    // 识别的文法产生式：relOp :  T_LE | T_GE | T_LT | T_GT
+    if (ctx->T_LE()) {
 		return ast_operator_type::AST_OP_LE;
 	} else if (ctx->T_GE()) {
 		return ast_operator_type::AST_OP_GE;
@@ -406,9 +528,20 @@ std::any MiniCCSTVisitor::visitMulOp(MiniCParser::MulOpContext * ctx)
 
 std::any MiniCCSTVisitor::visitUnaryExp(MiniCParser::UnaryExpContext * ctx)
 {
-    // 识别文法产生式：unaryExp:T_SUB unaryExp | primaryExp | T_ID T_L_PAREN realParamList ? T_R_PAREN;
+    // 识别文法产生式：unaryExp:(T_SUB | T_NOT) unaryExp | primaryExp | T_ID T_L_PAREN realParamList ? T_R_PAREN;
 
-    if (ctx->T_SUB()) {
+    if (ctx->T_NOT()) {
+		// 单目非运算
+		std::any operandResult = visitUnaryExp(ctx->unaryExp()); // 递归调用 visitUnaryExp
+
+		ast_node * operandNode = std::any_cast<ast_node *>(operandResult);
+
+		// 创建一个表示单目非操作的 AST 节点
+		int64_t lineNo = (int64_t) ctx->T_NOT()->getSymbol()->getLine();
+		ast_node * unaryNotNode = create_unary_not_node(operandNode, lineNo);
+
+		return unaryNotNode;
+	} else if (ctx->T_SUB()) {
         // 单目求负运算
         std::any operandResult = visitUnaryExp(ctx->unaryExp()); // 递归调用 visitUnaryExp
 
