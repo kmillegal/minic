@@ -20,6 +20,7 @@
 #include "Antlr4CSTVisitor.h"
 #include "AST.h"
 #include "AttrType.h"
+#include "MiniCParser.h"
 
 #define Instanceof(res, type, var) auto res = dynamic_cast<type>(var)
 
@@ -161,6 +162,7 @@ std::any MiniCCSTVisitor::visitStatement(MiniCParser::StatementContext * ctx)
     // | T_RETURN expr T_SEMICOLON # returnStatement
     // | block  # blockStatement
     // | expr ? T_SEMICOLON #expressionStatement;
+    // | T_IF T_L_PAREN expr T_R_PAREN statement (T_ELSE statement)? # ifStatement
     if (Instanceof(assignCtx, MiniCParser::AssignStatementContext *, ctx)) {
         return visitAssignStatement(assignCtx);
     } else if (Instanceof(returnCtx, MiniCParser::ReturnStatementContext *, ctx)) {
@@ -169,7 +171,9 @@ std::any MiniCCSTVisitor::visitStatement(MiniCParser::StatementContext * ctx)
         return visitBlockStatement(blockCtx);
     } else if (Instanceof(exprCtx, MiniCParser::ExpressionStatementContext *, ctx)) {
         return visitExpressionStatement(exprCtx);
-    }
+    } else if (Instanceof(exprCtx, MiniCParser::IfStatementContext *, ctx)) {
+		return visitIfStatement(exprCtx);
+	}
 
     return nullptr;
 }
@@ -187,6 +191,29 @@ std::any MiniCCSTVisitor::visitReturnStatement(MiniCParser::ReturnStatementConte
 
     // 创建返回节点，其孩子为Expr
     return create_contain_node(ast_operator_type::AST_OP_RETURN, exprNode);
+}
+
+/// @brief 非终结运算符statement中的IfStatement的遍历
+/// @param ctx CST上下文
+std::any MiniCCSTVisitor::visitIfStatement(MiniCParser::IfStatementContext * ctx)
+{
+	// 识别的文法产生式：ifStatement : T_IF T_L_PAREN expr T_R_PAREN statement (T_ELSE statement)?;
+
+	// 非终结符，表达式expr遍历
+	auto exprNode = std::any_cast<ast_node *>(visitExpr(ctx->expr()));
+
+	// 遍历if语句块
+	auto ifBlockNode = std::any_cast<ast_node *>(visitStatement(ctx->statement(0)));
+
+	ast_node * elseBlockNode = nullptr;
+
+	if (ctx->statement().size() > 1) {
+		// 遍历else语句块
+		elseBlockNode = std::any_cast<ast_node *>(visitStatement(ctx->statement(1)));
+	}
+
+	// 创建if节点，其孩子为Expr和if语句块和else语句块
+	return create_contain_node(ast_operator_type::AST_OP_IF, exprNode, ifBlockNode, elseBlockNode);
 }
 
 /// @brief 非终结运算符expr的遍历

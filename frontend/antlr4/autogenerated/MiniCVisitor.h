@@ -43,6 +43,8 @@ public:
 
     virtual std::any visitExpressionStatement(MiniCParser::ExpressionStatementContext *context) = 0;
 
+    virtual std::any visitIfStatement(MiniCParser::IfStatementContext *context) = 0;
+
     virtual std::any visitExpr(MiniCParser::ExprContext *context) = 0;
 
     virtual std::any visitRelExp(MiniCParser::RelExpContext *context) = 0;

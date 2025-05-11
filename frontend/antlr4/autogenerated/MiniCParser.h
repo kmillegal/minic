@@ -15,7 +15,8 @@ public:
     T_L_PAREN = 1, T_R_PAREN = 2, T_SEMICOLON = 3, T_L_BRACE = 4, T_R_BRACE = 5, 
     T_ASSIGN = 6, T_EQ = 7, T_NE = 8, T_LE = 9, T_LT = 10, T_GE = 11, T_GT = 12, 
     T_COMMA = 13, T_ADD = 14, T_SUB = 15, T_MUL = 16, T_DIV = 17, T_MOD = 18, 
-    T_RETURN = 19, T_INT = 20, T_VOID = 21, T_ID = 22, T_DIGIT = 23, WS = 24
+    T_RETURN = 19, T_INT = 20, T_VOID = 21, T_IF = 22, T_ELSE = 23, T_ID = 24, 
+    T_DIGIT = 25, WS = 26
   };
 
   enum {
@@ -236,6 +237,21 @@ public:
     antlr4::tree::TerminalNode *T_RETURN();
     ExprContext *expr();
     antlr4::tree::TerminalNode *T_SEMICOLON();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  IfStatementContext : public StatementContext {
+  public:
+    IfStatementContext(StatementContext *ctx);
+
+    antlr4::tree::TerminalNode *T_IF();
+    antlr4::tree::TerminalNode *T_L_PAREN();
+    ExprContext *expr();
+    antlr4::tree::TerminalNode *T_R_PAREN();
+    std::vector<StatementContext *> statement();
+    StatementContext* statement(size_t i);
+    antlr4::tree::TerminalNode *T_ELSE();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };

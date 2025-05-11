@@ -116,8 +116,12 @@ enum class ast_operator_type : int {
 
     /// @brief 二元运算符/
     AST_OP_DIV,
+
     /// @brief 二元运算符%
     AST_OP_MOD,
+
+    /// @brief IF语句运算符
+    AST_OP_IF,
 
     /// @brief 最大标识符，表示非法运算符
     AST_OP_MAX,
