@@ -58,6 +58,20 @@ enum class IRInstOperator : std::int8_t {
     IRINST_OP_DIV_I,
     /// @brief 整数的取余指令，二元运算
     IRINST_OP_MOD_I,
+    /// @brief 等于指令，二元运算
+    IRINST_OP_EQ_I,
+    /// @brief 不等于指令，二元运算
+    IRINST_OP_NE_I,
+    /// @brief 小于等于指令，二元运算
+    IRINST_OP_LE_I,
+    /// @brief 小于指令，二元运算
+    IRINST_OP_LT_I,
+    /// @brief 大于等于指令，二元运算
+    IRINST_OP_GE_I,
+    /// @brief 大于指令，二元运算
+    IRINST_OP_GT_I,
+    /// @brief 条件分支指令
+    IRINST_OP_BRANCH,
 
     /// @brief 最大指令码，也是无效指令
     IRINST_OP_MAX

@@ -33,6 +33,7 @@
 #include "BinaryInstruction.h"
 #include "MoveInstruction.h"
 #include "GotoInstruction.h"
+#include "BranchInstruction.h"
 
 /// @brief 构造函数
 /// @param _root AST的根
@@ -51,10 +52,18 @@ IRGenerator::IRGenerator(ast_node * _root, Module * _module) : root(_root), modu
     ast2ir_handlers[ast_operator_type::AST_OP_MUL] = &IRGenerator::ir_mul;
     ast2ir_handlers[ast_operator_type::AST_OP_DIV] = &IRGenerator::ir_div;
     ast2ir_handlers[ast_operator_type::AST_OP_MOD] = &IRGenerator::ir_mod;
+    ast2ir_handlers[ast_operator_type::AST_OP_EQ] = &IRGenerator::ir_eq;
+    ast2ir_handlers[ast_operator_type::AST_OP_NE] = &IRGenerator::ir_ne;
+    ast2ir_handlers[ast_operator_type::AST_OP_LE] = &IRGenerator::ir_le;
+    ast2ir_handlers[ast_operator_type::AST_OP_LT] = &IRGenerator::ir_lt;
+    ast2ir_handlers[ast_operator_type::AST_OP_GE] = &IRGenerator::ir_ge;
+    ast2ir_handlers[ast_operator_type::AST_OP_GT] = &IRGenerator::ir_gt;
+
 
     /* 语句 */
     ast2ir_handlers[ast_operator_type::AST_OP_ASSIGN] = &IRGenerator::ir_assign;
     ast2ir_handlers[ast_operator_type::AST_OP_RETURN] = &IRGenerator::ir_return;
+    ast2ir_handlers[ast_operator_type::AST_OP_IF] = &IRGenerator::ir_if;
 
     /* 函数调用 */
     ast2ir_handlers[ast_operator_type::AST_OP_FUNC_CALL] = &IRGenerator::ir_function_call;
@@ -616,6 +625,259 @@ bool IRGenerator::ir_mod(ast_node * node)
 	return true;
 }
 
+/// @brief 整数等于AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_eq(ast_node * node)
+{
+	ast_node * src1_node = node->sons[0];
+	ast_node * src2_node = node->sons[1];
+
+	// 等于节点，左结合，先计算左节点，后计算右节点
+
+	// 等于的左边操作数
+	ast_node * left = ir_visit_ast_node(src1_node);
+	if (!left) {
+		// 某个变量没有定值
+		return false;
+	}
+
+	// 等于的右边操作数
+	ast_node * right = ir_visit_ast_node(src2_node);
+	if (!right) {
+		// 某个变量没有定值
+		return false;
+	}
+
+	// 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
+
+	BinaryInstruction * eqInst = new BinaryInstruction(module->getCurrentFunction(),
+														IRInstOperator::IRINST_OP_EQ_I,
+														left->val,
+														right->val,
+														IntegerType::getTypeBool());
+
+	// 创建临时变量保存IR的值，以及线性IR指令
+	node->blockInsts.addInst(left->blockInsts);
+	node->blockInsts.addInst(right->blockInsts);
+	node->blockInsts.addInst(eqInst);
+
+	node->val = eqInst;
+
+	return true;
+}
+
+/// @brief 整数不等于AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_ne(ast_node * node)
+{
+	ast_node * src1_node = node->sons[0];
+	ast_node * src2_node = node->sons[1];
+
+	// 不等于节点，左结合，先计算左节点，后计算右节点
+
+	// 不等于的左边操作数
+	ast_node * left = ir_visit_ast_node(src1_node);
+	if (!left) {
+		// 某个变量没有定值
+		return false;
+	}
+
+	// 不等于的右边操作数
+	ast_node * right = ir_visit_ast_node(src2_node);
+	if (!right) {
+		// 某个变量没有定值
+		return false;
+	}
+
+	// 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
+
+	BinaryInstruction * neInst = new BinaryInstruction(module->getCurrentFunction(),
+														IRInstOperator::IRINST_OP_NE_I,
+														left->val,
+														right->val,
+														IntegerType::getTypeBool());
+
+	// 创建临时变量保存IR的值，以及线性IR指令
+	node->blockInsts.addInst(left->blockInsts);
+	node->blockInsts.addInst(right->blockInsts);
+	node->blockInsts.addInst(neInst);
+
+	node->val = neInst;
+
+	return true;
+}
+
+/// @brief 整数大于等于AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_ge(ast_node * node)
+{
+	ast_node * src1_node = node->sons[0];
+	ast_node * src2_node = node->sons[1];
+
+	// 大于等于节点，左结合，先计算左节点，后计算右节点
+
+	// 大于等于的左边操作数
+	ast_node * left = ir_visit_ast_node(src1_node);
+	if (!left) {
+		// 某个变量没有定值
+		return false;
+	}
+
+	// 大于等于的右边操作数
+	ast_node * right = ir_visit_ast_node(src2_node);
+	if (!right) {
+		// 某个变量没有定值
+		return false;
+	}
+
+	// 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
+
+	BinaryInstruction * geInst = new BinaryInstruction(module->getCurrentFunction(),
+														IRInstOperator::IRINST_OP_GE_I,
+														left->val,
+														right->val,
+														IntegerType::getTypeBool());
+
+	// 创建临时变量保存IR的值，以及线性IR指令
+	node->blockInsts.addInst(left->blockInsts);
+	node->blockInsts.addInst(right->blockInsts);
+	node->blockInsts.addInst(geInst);
+
+	node->val = geInst;
+
+	return true;
+}
+
+/// @brief 整数大于AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_gt(ast_node * node)
+{
+	ast_node * src1_node = node->sons[0];
+	ast_node * src2_node = node->sons[1];
+
+	// 大于节点，左结合，先计算左节点，后计算右节点
+
+	// 大于的左边操作数
+	ast_node * left = ir_visit_ast_node(src1_node);
+	if (!left) {
+		// 某个变量没有定值
+		return false;
+	}
+
+	// 大于的右边操作数
+	ast_node * right = ir_visit_ast_node(src2_node);
+	if (!right) {
+		// 某个变量没有定值
+		return false;
+	}
+
+	// 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
+
+	BinaryInstruction * gtInst = new BinaryInstruction(module->getCurrentFunction(),
+														IRInstOperator::IRINST_OP_GT_I,
+														left->val,
+														right->val,
+														IntegerType::getTypeBool());
+
+	// 创建临时变量保存IR的值，以及线性IR指令
+	node->blockInsts.addInst(left->blockInsts);
+	node->blockInsts.addInst(right->blockInsts);
+	node->blockInsts.addInst(gtInst);
+
+	node->val = gtInst;
+
+	return true;
+}
+
+/// @brief 整数小于等于AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_le(ast_node * node)
+{
+	ast_node * src1_node = node->sons[0];
+	ast_node * src2_node = node->sons[1];
+
+	// 小于等于节点，左结合，先计算左节点，后计算右节点
+
+	// 小于等于的左边操作数
+	ast_node * left = ir_visit_ast_node(src1_node);
+	if (!left) {
+		// 某个变量没有定值
+		return false;
+	}
+
+	// 小于等于的右边操作数
+	ast_node * right = ir_visit_ast_node(src2_node);
+	if (!right) {
+		// 某个变量没有定值
+		return false;
+	}
+
+	// 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
+
+	BinaryInstruction * leInst = new BinaryInstruction(module->getCurrentFunction(),
+														IRInstOperator::IRINST_OP_LE_I,
+														left->val,
+														right->val,
+														IntegerType::getTypeBool());
+
+	// 创建临时变量保存IR的值，以及线性IR指令
+	node->blockInsts.addInst(left->blockInsts);
+	node->blockInsts.addInst(right->blockInsts);
+	node->blockInsts.addInst(leInst);
+
+	node->val = leInst;
+
+	return true;
+}
+
+/// @brief 整数小于AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_lt(ast_node * node)
+{
+	ast_node * src1_node = node->sons[0];
+	ast_node * src2_node = node->sons[1];
+
+	// 小于节点，左结合，先计算左节点，后计算右节点
+
+	// 小于的左边操作数
+	ast_node * left = ir_visit_ast_node(src1_node);
+	if (!left) {
+		// 某个变量没有定值
+		return false;
+	}
+
+	// 小于的右边操作数
+	ast_node * right = ir_visit_ast_node(src2_node);
+	if (!right) {
+		// 某个变量没有定值
+		return false;
+	}
+
+	// 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
+
+	BinaryInstruction * ltInst = new BinaryInstruction(module->getCurrentFunction(),
+														IRInstOperator::IRINST_OP_LT_I,
+														left->val,
+														right->val,
+														IntegerType::getTypeBool());
+
+	// 创建临时变量保存IR的值，以及线性IR指令
+	node->blockInsts.addInst(left->blockInsts);
+	node->blockInsts.addInst(right->blockInsts);
+	node->blockInsts.addInst(ltInst);
+
+	node->val = ltInst;
+
+	return true;
+}
+
+
 /// @brief 赋值AST节点翻译成线性中间IR
 /// @param node AST节点
 /// @return 翻译是否成功，true：成功，false：失败
@@ -697,6 +959,116 @@ bool IRGenerator::ir_return(ast_node * node)
 
     // 跳转到函数的尾部出口指令上
     node->blockInsts.addInst(new GotoInstruction(currentFunc, currentFunc->getExitLabel()));
+
+    return true;
+}
+
+/// @brief if节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_if(ast_node * node)
+{
+    Function * currentFunc = module->getCurrentFunction();
+    if (!currentFunc) {
+        // 通常不应该在没有当前函数上下文的情况下处理if语句
+        minic_log(LOG_ERROR, "IRGenerator::ir_if called outside of a function context.");
+        return false;
+    }
+
+    // if 语句的AST结构通常是:
+    // node->sons[0]: 条件表达式 (condition)
+    // node->sons[1]: then 语句块 (then_block)
+    // node->sons[2]: (可选) else 语句块 (else_block)
+
+    if (node->sons.size() < 2) {
+        minic_log(LOG_ERROR, "Invalid if statement AST node: missing condition or then-block.");
+        return false;
+    }
+
+    ast_node * cond_node = node->sons[0];
+    ast_node * then_node = node->sons[1];
+    ast_node * else_node = nullptr;
+    bool has_else = (node->sons.size() > 2);
+
+    if (has_else) {
+        else_node = node->sons[2];
+    }
+
+    // 1. 创建需要的标签
+    LabelInstruction * then_label = new LabelInstruction(currentFunc);
+    LabelInstruction * else_label = nullptr; // 只有在有else分支时才创建
+    LabelInstruction * end_if_label = new LabelInstruction(currentFunc);
+
+    if (has_else) {
+        else_label = new LabelInstruction(currentFunc);
+    }
+
+    // 2. 翻译条件表达式
+    if (!ir_visit_ast_node(cond_node)) {
+        minic_log(LOG_ERROR, "Failed to generate IR for if-condition at line %lld.", (long long) cond_node->line_no);
+        // 清理已创建的标签，因为它们不会被加入指令流
+        delete then_label;
+        if (else_label)
+            delete else_label;
+        delete end_if_label;
+        return false;
+    }
+    // 条件表达式生成的指令加入到if节点的指令列表中
+    node->blockInsts.addInst(cond_node->blockInsts);
+    Value * cond_val = cond_node->val; // 条件表达式的结果 Value
+
+    if (!cond_val) {
+        minic_log(LOG_ERROR, "If-condition at line %lld did not produce a value.", (long long) cond_node->line_no);
+        delete then_label;
+        if (else_label)
+            delete else_label;
+        delete end_if_label;
+        return false;
+    }
+    // TODO: 可能需要检查 cond_val 的类型是否可以用于条件判断 (例如，bool 或 int)
+
+    // 3. 创建条件跳转指令
+    // BranchInstruction(currentFunc, cond_val, true_target, false_target)
+    // 如果 cond_val 为真, 跳转到 true_target, 否则跳转到 false_target.
+    // true_target 总是 then_label.
+    // false_target 是 else_label (如果有else) 或 end_if_label (如果没有else).
+    LabelInstruction * false_target_for_branch = has_else ? else_label : end_if_label;
+
+
+    node->blockInsts.addInst(new BranchInstruction(currentFunc, cond_val, then_label, false_target_for_branch));
+
+    // 4. 添加 then_label 并翻译 then_block
+    node->blockInsts.addInst(then_label);
+    if (!ir_visit_ast_node(then_node)) {
+        minic_log(LOG_ERROR, "Failed to generate IR for if-then block at line %lld.", (long long) then_node->line_no);
+        // 注意：此时标签可能已经加入 blockInsts，错误处理时 InterCode 应负责清理其内容
+        return false;
+    }
+    node->blockInsts.addInst(then_node->blockInsts);
+
+    // 5. 处理 else_block (如果存在)
+    if (has_else) {
+        // 在 then_block 之后，需要一个无条件跳转到 end_if_label，以跳过 else_block
+        node->blockInsts.addInst(new GotoInstruction(currentFunc, end_if_label));
+
+        // 添加 else_label 并翻译 else_block
+        node->blockInsts.addInst(else_label);
+        if (!ir_visit_ast_node(else_node)) {
+            minic_log(LOG_ERROR,
+                      "Failed to generate IR for if-else block at line %lld.",
+                      (long long) else_node->line_no);
+            return false;
+        }
+        node->blockInsts.addInst(else_node->blockInsts);
+    }
+    // 如果没有 else, false_target_for_branch 已经指向 end_if_label,
+    // 并且 then_block 执行完毕后会自然流向 end_if_label (除非then_block有自己的跳转如return)
+
+    // 6. 添加 end_if_label
+    node->blockInsts.addInst(end_if_label);
+
+    // if 语句本身不产生值，所以 node->val 保持不变 (或设为nullptr)
+    node->val = nullptr;
 
     return true;
 }
