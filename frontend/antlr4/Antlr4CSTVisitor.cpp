@@ -282,7 +282,7 @@ std::any MiniCCSTVisitor::visitLorExp(MiniCParser::LorExpContext * ctx)
 
 	auto opsCtxVec = ctx->landExp();
 
-	for (int k = 0; k < (int) opsCtxVec.size(); k++) {
+	for (int k = 0; k < (int) opsCtxVec.size()-1; k++) {
 
 		if (k == 0) {
 			left = std::any_cast<ast_node *>(visitLandExp(opsCtxVec[k]));
@@ -301,16 +301,18 @@ std::any MiniCCSTVisitor::visitLorExp(MiniCParser::LorExpContext * ctx)
 std::any MiniCCSTVisitor::visitLandExp(MiniCParser::LandExpContext * ctx)
 {
 	// 识别产生式：landExp: eqExp (T_AND eqExp)*;
+    int x;
+    x = ctx->eqExp().size();
+    if (x == 1)
+    {
+        return visitEqExp(ctx->eqExp()[0]);
+    }
 
-	if (ctx->eqExp().size() == 1) {
-		return visitEqExp(ctx->eqExp()[0]);
-	}
+    ast_node * left, * right;
 
-	ast_node * left, * right;
+	auto opsCtxVec = ctx->eqExp();// eqExp的个数，后续得到size-1
 
-	auto opsCtxVec = ctx->eqExp();
-
-	for (int k = 0; k < (int) opsCtxVec.size(); k++) {
+	for (int k = 0; k < (int) opsCtxVec.size()-1; k++) {
 
 		if (k == 0) {
 			left = std::any_cast<ast_node *>(visitEqExp(opsCtxVec[k]));
@@ -328,15 +330,16 @@ std::any MiniCCSTVisitor::visitLandExp(MiniCParser::LandExpContext * ctx)
 /// @param ctx CST上下文
 std::any MiniCCSTVisitor::visitEqExp(MiniCParser::EqExpContext * ctx)
 {
-	// 识别的文法产生式：eqExp : relExp (eqOp relExp)*;
+    // 识别的文法产生式：eqExp : relExp (eqOp relExp)*;
 
-	if (ctx->relExp().size() == 1) {
+    if (ctx->eqOp().empty()) {
+		// 没有eqOp运算符，则说明闭包识别为0，只识别了第一个非终结符relExp
 		return visitRelExp(ctx->relExp()[0]);
 	}
 
 	ast_node * left, * right;
 
-	auto opsCtxVec = ctx->eqOp();
+	auto opsCtxVec = ctx->eqOp();// eqOp的个数
 
     // 有操作符，肯定会进循环，使得right设置正确的值
     for (int k = 0; k < (int) opsCtxVec.size(); k++) {

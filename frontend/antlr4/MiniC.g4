@@ -43,7 +43,7 @@ statement:
 	| T_IF T_L_PAREN expr T_R_PAREN statement (T_ELSE statement)? # ifStatement // 新增：if语句
 	| T_WHILE T_L_PAREN expr T_R_PAREN statement # whileStatement; // 新增：while语句
 
-	// 表达式文法 expr : RelExp 表达式现在以关系表达式为入口
+	// 表达式文法 expr : lorExp
 expr: lorExp;
 
 // 逻辑或表达式 (二目运算符 ||) 操作数是逻辑与表达式 (landExp)，优先级低于逻辑与
