@@ -58,7 +58,10 @@ IRGenerator::IRGenerator(ast_node * _root, Module * _module) : root(_root), modu
     ast2ir_handlers[ast_operator_type::AST_OP_LT] = &IRGenerator::ir_lt;
     ast2ir_handlers[ast_operator_type::AST_OP_GE] = &IRGenerator::ir_ge;
     ast2ir_handlers[ast_operator_type::AST_OP_GT] = &IRGenerator::ir_gt;
-
+    /* 逻辑运算 */
+    ast2ir_handlers[ast_operator_type::AST_OP_AND] = &IRGenerator::ir_and;
+    ast2ir_handlers[ast_operator_type::AST_OP_OR] = &IRGenerator::ir_or;
+    ast2ir_handlers[ast_operator_type::AST_OP_NOT] = &IRGenerator::ir_not;
 
     /* 语句 */
     ast2ir_handlers[ast_operator_type::AST_OP_ASSIGN] = &IRGenerator::ir_assign;
@@ -123,6 +126,105 @@ ast_node * IRGenerator::ir_visit_ast_node(ast_node * node)
         node = nullptr;
     }
 
+    return node;
+}
+
+/// @brief 访问AST节点，用于将其作为条件处理，并根据结果跳转。
+/// @param node AST节点。
+/// @param true_target 如果 node 求值为真，则跳转到此标签。
+/// @param false_target 如果 node 求值为假，则跳转到此标签。
+/// @return 处理是否成功。node->blockInsts 将包含生成的指令。
+bool IRGenerator::ir_visit_for_condition(ast_node * node,
+                                         LabelInstruction * true_target,
+                                         LabelInstruction * false_target)
+{
+    if (!node || !true_target || !false_target) {
+        // 适当的错误记录或返回
+        return false;
+    }
+    if (!module->getCurrentFunction()) { // 确保在函数上下文中
+        return false;
+    }
+
+    // 保存外部的 true/false 目标，因为递归调用可能会修改它们
+    LabelInstruction * prev_true_target = m_current_true_target;
+    LabelInstruction * prev_false_target = m_current_false_target;
+
+    m_current_true_target = true_target;
+    m_current_false_target = false_target;
+
+    ast_node * result_node = ir_visit_ast_node_recursive(node); // 调用核心的递归访问
+
+    // 恢复之前的 true/false 目标，以支持嵌套的逻辑运算
+    m_current_true_target = prev_true_target;
+    m_current_false_target = prev_false_target;
+
+    return (result_node != nullptr);
+}
+
+/// @brief 访问AST节点的核心递归函数
+/// @param node AST节点
+/// @return 处理后的节点，可能是 nullptr
+ast_node * IRGenerator::ir_visit_ast_node_recursive(ast_node * node)
+{
+    // 空节点检查
+    if (nullptr == node) {
+        return nullptr;
+    }
+
+    bool success_of_handler; // 用于接收具体处理器函数的返回值
+
+    // 从映射表中查找对应当前节点类型的处理函数
+    std::unordered_map<ast_operator_type, ast2ir_handler_t>::const_iterator pIter;
+    pIter = ast2ir_handlers.find(node->node_type);
+
+    if (pIter == ast2ir_handlers.end()) {
+        // 没有找到特定的处理器，使用默认处理器
+        success_of_handler = (this->ir_default)(node);
+    } else {
+        success_of_handler = (this->*(pIter->second))(node);
+    }
+
+    // 检查处理器函数是否成功执行
+    if (!success_of_handler) {
+        // 具体的处理器函数（如 ir_lt, ir_add）应该在失败时记录错误信息
+        // 这里可以选择进一步处理或直接返回nullptr表示失败
+        return nullptr;
+    }
+
+    // 通用后处理逻辑：
+    // 如果当前节点计算出了一个值 (node->val 非空),
+    // 并且我们处于一个条件上下文中 (m_current_true_target 和 m_current_false_target 非空),
+    // 并且该节点本身不是一个会自己处理控制流的“控制流敏感”操作符，
+    // 那么为这个 node->val 生成一条 BranchInstruction。
+    if (node->val && m_current_true_target && m_current_false_target) {
+        bool is_control_flow_sensitive_op =
+            (node->node_type == ast_operator_type::AST_OP_AND || node->node_type == ast_operator_type::AST_OP_OR ||
+             node->node_type == ast_operator_type::AST_OP_NOT || node->node_type == ast_operator_type::AST_OP_IF ||
+             node->node_type == ast_operator_type::AST_OP_EQ || node->node_type == ast_operator_type::AST_OP_NE ||
+             node->node_type == ast_operator_type::AST_OP_LT || node->node_type == ast_operator_type::AST_OP_LE ||
+             node->node_type == ast_operator_type::AST_OP_GT || node->node_type == ast_operator_type::AST_OP_GE);
+        // 注意: return 语句也是控制流敏感的，但它不使用真假出口，而是直接跳转或结束。
+        // func_call 如果有返回值，其返回值可以作为条件，所以它不是控制流敏感的（除非它永不返回）。
+
+        if (!is_control_flow_sensitive_op) {
+            Function * currentFunc = module->getCurrentFunction();
+            if (currentFunc) { // 确保有当前函数上下文来创建指令
+                node->blockInsts.addInst(
+                    new BranchInstruction(currentFunc, node->val, m_current_true_target, m_current_false_target));
+                node->val = nullptr; // 结果已经通过控制流体现，此节点不应再向上层传递值
+                                     // 除非上层逻辑有特殊需求。
+            } else {
+                // 错误：在没有当前函数的情况下尝试创建分支指令
+                minic_log(LOG_ERROR,
+                          "Attempted to create branch instruction outside of a function context for node type %d",
+                          (int) node->node_type);
+                return nullptr; // 指示错误
+            }
+        }
+    }
+
+    // 如果一切顺利，返回处理过的节点
     return node;
 }
 
@@ -630,41 +732,56 @@ bool IRGenerator::ir_mod(ast_node * node)
 /// @return 翻译是否成功，true：成功，false：失败
 bool IRGenerator::ir_eq(ast_node * node)
 {
-	ast_node * src1_node = node->sons[0];
-	ast_node * src2_node = node->sons[1];
+    Function * currentFunc = module->getCurrentFunction();
 
-	// 等于节点，左结合，先计算左节点，后计算右节点
+    ast_node * left_child_node = node->sons[0];
+    ast_node * right_child_node = node->sons[1];
 
-	// 等于的左边操作数
-	ast_node * left = ir_visit_ast_node(src1_node);
-	if (!left) {
-		// 某个变量没有定值
-		return false;
-	}
+    // 递归访问左右子节点以计算它们的值。
+    LabelInstruction * original_true_target = m_current_true_target;
+    LabelInstruction * original_false_target = m_current_false_target;
+    m_current_true_target = nullptr;
+    m_current_false_target = nullptr;
 
-	// 等于的右边操作数
-	ast_node * right = ir_visit_ast_node(src2_node);
-	if (!right) {
-		// 某个变量没有定值
-		return false;
-	}
+    ast_node * left_val_node = ir_visit_ast_node_recursive(left_child_node);
 
-	// 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
+    ast_node * right_val_node = ir_visit_ast_node_recursive(right_child_node);
 
-	BinaryInstruction * eqInst = new BinaryInstruction(module->getCurrentFunction(),
-														IRInstOperator::IRINST_OP_EQ_I,
-														left->val,
-														right->val,
-														IntegerType::getTypeBool());
+    // 恢复 m_current_...
+    m_current_true_target = original_true_target;
+    m_current_false_target = original_false_target;
 
-	// 创建临时变量保存IR的值，以及线性IR指令
-	node->blockInsts.addInst(left->blockInsts);
-	node->blockInsts.addInst(right->blockInsts);
-	node->blockInsts.addInst(eqInst);
+    // 将子节点生成的指令添加到当前节点的指令列表中
+    node->blockInsts.addInst(left_val_node->blockInsts);
+    node->blockInsts.addInst(right_val_node->blockInsts);
 
-	node->val = eqInst;
+    // 创建比较指令
+    Type * comparison_result_type = IntegerType::getTypeBool();
 
-	return true;
+    BinaryInstruction * cmp_instruction =
+        new BinaryInstruction(currentFunc,
+                              IRInstOperator::IRINST_OP_EQ_I, // 整数等于比较的操作码
+                              left_val_node->val,             // %l1 (a)
+                              right_val_node->val,            // %l2 (b)
+                              comparison_result_type          // 比较结果的类型
+        );
+    node->blockInsts.addInst(cmp_instruction);
+    Value * comparison_result_val = cmp_instruction; // cmp 指令本身就是结果 Value (%t1)
+
+    // 检查是否在条件上下文中 (即父节点是否传递了真/假出口标签)
+    if (m_current_true_target && m_current_false_target) {
+        // 如果是，则生成条件跳转指令 (bc)
+        node->blockInsts.addInst(new BranchInstruction(currentFunc,
+                                                       comparison_result_val, // %t1 (比较结果)
+                                                       m_current_true_target, // label .L0 (真出口)
+                                                       m_current_false_target // label .L1 (假出口)
+                                                       ));
+        node->val = nullptr; // 结果已经通过控制流体现，此节点不向上层传递值
+    } else {
+        node->val = comparison_result_val;
+    }
+
+    return true;
 }
 
 /// @brief 整数不等于AST节点翻译成线性中间IR
@@ -672,41 +789,56 @@ bool IRGenerator::ir_eq(ast_node * node)
 /// @return 翻译是否成功，true：成功，false：失败
 bool IRGenerator::ir_ne(ast_node * node)
 {
-	ast_node * src1_node = node->sons[0];
-	ast_node * src2_node = node->sons[1];
+    Function * currentFunc = module->getCurrentFunction();
 
-	// 不等于节点，左结合，先计算左节点，后计算右节点
+    ast_node * left_child_node = node->sons[0];
+    ast_node * right_child_node = node->sons[1];
 
-	// 不等于的左边操作数
-	ast_node * left = ir_visit_ast_node(src1_node);
-	if (!left) {
-		// 某个变量没有定值
-		return false;
-	}
+    // 递归访问左右子节点以计算它们的值。
+    LabelInstruction * original_true_target = m_current_true_target;
+    LabelInstruction * original_false_target = m_current_false_target;
+    m_current_true_target = nullptr;
+    m_current_false_target = nullptr;
 
-	// 不等于的右边操作数
-	ast_node * right = ir_visit_ast_node(src2_node);
-	if (!right) {
-		// 某个变量没有定值
-		return false;
-	}
+    ast_node * left_val_node = ir_visit_ast_node_recursive(left_child_node);
 
-	// 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
+    ast_node * right_val_node = ir_visit_ast_node_recursive(right_child_node);
 
-	BinaryInstruction * neInst = new BinaryInstruction(module->getCurrentFunction(),
-														IRInstOperator::IRINST_OP_NE_I,
-														left->val,
-														right->val,
-														IntegerType::getTypeBool());
+    // 恢复 m_current_...
+    m_current_true_target = original_true_target;
+    m_current_false_target = original_false_target;
 
-	// 创建临时变量保存IR的值，以及线性IR指令
-	node->blockInsts.addInst(left->blockInsts);
-	node->blockInsts.addInst(right->blockInsts);
-	node->blockInsts.addInst(neInst);
+    // 将子节点生成的指令添加到当前节点的指令列表中
+    node->blockInsts.addInst(left_val_node->blockInsts);
+    node->blockInsts.addInst(right_val_node->blockInsts);
 
-	node->val = neInst;
+    // 创建比较指令
+    Type * comparison_result_type = IntegerType::getTypeBool();
 
-	return true;
+    BinaryInstruction * cmp_instruction =
+        new BinaryInstruction(currentFunc,
+                              IRInstOperator::IRINST_OP_NE_I, // 整数不等于比较的操作码
+                              left_val_node->val,             // %l1 (a)
+                              right_val_node->val,            // %l2 (b)
+                              comparison_result_type          // 比较结果的类型
+        );
+    node->blockInsts.addInst(cmp_instruction);
+    Value * comparison_result_val = cmp_instruction; // cmp 指令本身就是结果 Value (%t1)
+
+    // 检查是否在条件上下文中 (即父节点是否传递了真/假出口标签)
+    if (m_current_true_target && m_current_false_target) {
+        // 如果是，则生成条件跳转指令 (bc)
+        node->blockInsts.addInst(new BranchInstruction(currentFunc,
+                                                       comparison_result_val, // %t1 (比较结果)
+                                                       m_current_true_target, // label .L0 (真出口)
+                                                       m_current_false_target // label .L1 (假出口)
+                                                       ));
+        node->val = nullptr; // 结果已经通过控制流体现，此节点不向上层传递值
+    } else {
+        node->val = comparison_result_val;
+    }
+
+    return true;
 }
 
 /// @brief 整数大于等于AST节点翻译成线性中间IR
@@ -714,41 +846,56 @@ bool IRGenerator::ir_ne(ast_node * node)
 /// @return 翻译是否成功，true：成功，false：失败
 bool IRGenerator::ir_ge(ast_node * node)
 {
-	ast_node * src1_node = node->sons[0];
-	ast_node * src2_node = node->sons[1];
+    Function * currentFunc = module->getCurrentFunction();
 
-	// 大于等于节点，左结合，先计算左节点，后计算右节点
+    ast_node * left_child_node = node->sons[0];
+    ast_node * right_child_node = node->sons[1];
 
-	// 大于等于的左边操作数
-	ast_node * left = ir_visit_ast_node(src1_node);
-	if (!left) {
-		// 某个变量没有定值
-		return false;
-	}
+    // 递归访问左右子节点以计算它们的值。
+    LabelInstruction * original_true_target = m_current_true_target;
+    LabelInstruction * original_false_target = m_current_false_target;
+    m_current_true_target = nullptr;
+    m_current_false_target = nullptr;
 
-	// 大于等于的右边操作数
-	ast_node * right = ir_visit_ast_node(src2_node);
-	if (!right) {
-		// 某个变量没有定值
-		return false;
-	}
+    ast_node * left_val_node = ir_visit_ast_node_recursive(left_child_node);
 
-	// 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
+    ast_node * right_val_node = ir_visit_ast_node_recursive(right_child_node);
 
-	BinaryInstruction * geInst = new BinaryInstruction(module->getCurrentFunction(),
-														IRInstOperator::IRINST_OP_GE_I,
-														left->val,
-														right->val,
-														IntegerType::getTypeBool());
+    // 恢复 m_current_...
+    m_current_true_target = original_true_target;
+    m_current_false_target = original_false_target;
 
-	// 创建临时变量保存IR的值，以及线性IR指令
-	node->blockInsts.addInst(left->blockInsts);
-	node->blockInsts.addInst(right->blockInsts);
-	node->blockInsts.addInst(geInst);
+    // 将子节点生成的指令添加到当前节点的指令列表中
+    node->blockInsts.addInst(left_val_node->blockInsts);
+    node->blockInsts.addInst(right_val_node->blockInsts);
 
-	node->val = geInst;
+    // 创建比较指令
+    Type * comparison_result_type = IntegerType::getTypeBool();
 
-	return true;
+    BinaryInstruction * cmp_instruction =
+        new BinaryInstruction(currentFunc,
+                              IRInstOperator::IRINST_OP_GE_I, // 整数大于等于比较的操作码
+                              left_val_node->val,             // %l1 (a)
+                              right_val_node->val,            // %l2 (b)
+                              comparison_result_type          // 比较结果的类型
+        );
+    node->blockInsts.addInst(cmp_instruction);
+    Value * comparison_result_val = cmp_instruction; // cmp 指令本身就是结果 Value (%t1)
+
+    // 检查是否在条件上下文中 (即父节点是否传递了真/假出口标签)
+    if (m_current_true_target && m_current_false_target) {
+        // 如果是，则生成条件跳转指令 (bc)
+        node->blockInsts.addInst(new BranchInstruction(currentFunc,
+                                                       comparison_result_val, // %t1 (比较结果)
+                                                       m_current_true_target, // label .L0 (真出口)
+                                                       m_current_false_target // label .L1 (假出口)
+                                                       ));
+        node->val = nullptr; // 结果已经通过控制流体现，此节点不向上层传递值
+    } else {
+        node->val = comparison_result_val;
+    }
+
+    return true;
 }
 
 /// @brief 整数大于AST节点翻译成线性中间IR
@@ -756,41 +903,56 @@ bool IRGenerator::ir_ge(ast_node * node)
 /// @return 翻译是否成功，true：成功，false：失败
 bool IRGenerator::ir_gt(ast_node * node)
 {
-	ast_node * src1_node = node->sons[0];
-	ast_node * src2_node = node->sons[1];
+    Function * currentFunc = module->getCurrentFunction();
 
-	// 大于节点，左结合，先计算左节点，后计算右节点
+    ast_node * left_child_node = node->sons[0];
+    ast_node * right_child_node = node->sons[1];
 
-	// 大于的左边操作数
-	ast_node * left = ir_visit_ast_node(src1_node);
-	if (!left) {
-		// 某个变量没有定值
-		return false;
-	}
+    // 递归访问左右子节点以计算它们的值。
+    LabelInstruction * original_true_target = m_current_true_target;
+    LabelInstruction * original_false_target = m_current_false_target;
+    m_current_true_target = nullptr;
+    m_current_false_target = nullptr;
 
-	// 大于的右边操作数
-	ast_node * right = ir_visit_ast_node(src2_node);
-	if (!right) {
-		// 某个变量没有定值
-		return false;
-	}
+    ast_node * left_val_node = ir_visit_ast_node_recursive(left_child_node);
 
-	// 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
+    ast_node * right_val_node = ir_visit_ast_node_recursive(right_child_node);
 
-	BinaryInstruction * gtInst = new BinaryInstruction(module->getCurrentFunction(),
-														IRInstOperator::IRINST_OP_GT_I,
-														left->val,
-														right->val,
-														IntegerType::getTypeBool());
+    // 恢复 m_current_...
+    m_current_true_target = original_true_target;
+    m_current_false_target = original_false_target;
 
-	// 创建临时变量保存IR的值，以及线性IR指令
-	node->blockInsts.addInst(left->blockInsts);
-	node->blockInsts.addInst(right->blockInsts);
-	node->blockInsts.addInst(gtInst);
+    // 将子节点生成的指令添加到当前节点的指令列表中
+    node->blockInsts.addInst(left_val_node->blockInsts);
+    node->blockInsts.addInst(right_val_node->blockInsts);
 
-	node->val = gtInst;
+    // 创建比较指令
+    Type * comparison_result_type = IntegerType::getTypeBool();
 
-	return true;
+    BinaryInstruction * cmp_instruction =
+        new BinaryInstruction(currentFunc,
+                              IRInstOperator::IRINST_OP_GT_I, // 整数大于比较的操作码
+                              left_val_node->val,             // %l1 (a)
+                              right_val_node->val,            // %l2 (b)
+                              comparison_result_type          // 比较结果的类型
+        );
+    node->blockInsts.addInst(cmp_instruction);
+    Value * comparison_result_val = cmp_instruction; // cmp 指令本身就是结果 Value (%t1)
+
+    // 检查是否在条件上下文中 (即父节点是否传递了真/假出口标签)
+    if (m_current_true_target && m_current_false_target) {
+        // 如果是，则生成条件跳转指令 (bc)
+        node->blockInsts.addInst(new BranchInstruction(currentFunc,
+                                                       comparison_result_val, // %t1 (比较结果)
+                                                       m_current_true_target, // label .L0 (真出口)
+                                                       m_current_false_target // label .L1 (假出口)
+                                                       ));
+        node->val = nullptr; // 结果已经通过控制流体现，此节点不向上层传递值
+    } else {
+        node->val = comparison_result_val;
+    }
+
+    return true;
 }
 
 /// @brief 整数小于等于AST节点翻译成线性中间IR
@@ -798,41 +960,56 @@ bool IRGenerator::ir_gt(ast_node * node)
 /// @return 翻译是否成功，true：成功，false：失败
 bool IRGenerator::ir_le(ast_node * node)
 {
-	ast_node * src1_node = node->sons[0];
-	ast_node * src2_node = node->sons[1];
+    Function * currentFunc = module->getCurrentFunction();
 
-	// 小于等于节点，左结合，先计算左节点，后计算右节点
+    ast_node * left_child_node = node->sons[0];
+    ast_node * right_child_node = node->sons[1];
 
-	// 小于等于的左边操作数
-	ast_node * left = ir_visit_ast_node(src1_node);
-	if (!left) {
-		// 某个变量没有定值
-		return false;
-	}
+    // 递归访问左右子节点以计算它们的值。
+    LabelInstruction * original_true_target = m_current_true_target;
+    LabelInstruction * original_false_target = m_current_false_target;
+    m_current_true_target = nullptr;
+    m_current_false_target = nullptr;
 
-	// 小于等于的右边操作数
-	ast_node * right = ir_visit_ast_node(src2_node);
-	if (!right) {
-		// 某个变量没有定值
-		return false;
-	}
+    ast_node * left_val_node = ir_visit_ast_node_recursive(left_child_node);
 
-	// 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
+    ast_node * right_val_node = ir_visit_ast_node_recursive(right_child_node);
 
-	BinaryInstruction * leInst = new BinaryInstruction(module->getCurrentFunction(),
-														IRInstOperator::IRINST_OP_LE_I,
-														left->val,
-														right->val,
-														IntegerType::getTypeBool());
+    // 恢复 m_current_...
+    m_current_true_target = original_true_target;
+    m_current_false_target = original_false_target;
 
-	// 创建临时变量保存IR的值，以及线性IR指令
-	node->blockInsts.addInst(left->blockInsts);
-	node->blockInsts.addInst(right->blockInsts);
-	node->blockInsts.addInst(leInst);
+    // 将子节点生成的指令添加到当前节点的指令列表中
+    node->blockInsts.addInst(left_val_node->blockInsts);
+    node->blockInsts.addInst(right_val_node->blockInsts);
 
-	node->val = leInst;
+    // 创建比较指令
+    Type * comparison_result_type = IntegerType::getTypeBool();
 
-	return true;
+    BinaryInstruction * cmp_instruction =
+        new BinaryInstruction(currentFunc,
+                              IRInstOperator::IRINST_OP_LE_I, // 整数小于等于比较的操作码
+                              left_val_node->val,             // %l1 (a)
+                              right_val_node->val,            // %l2 (b)
+                              comparison_result_type          // 比较结果的类型
+        );
+    node->blockInsts.addInst(cmp_instruction);
+    Value * comparison_result_val = cmp_instruction; // cmp 指令本身就是结果 Value (%t1)
+
+    // 检查是否在条件上下文中 (即父节点是否传递了真/假出口标签)
+    if (m_current_true_target && m_current_false_target) {
+        // 如果是，则生成条件跳转指令 (bc)
+        node->blockInsts.addInst(new BranchInstruction(currentFunc,
+                                                       comparison_result_val, // %t1 (比较结果)
+                                                       m_current_true_target, // label .L0 (真出口)
+                                                       m_current_false_target // label .L1 (假出口)
+                                                       ));
+        node->val = nullptr; // 结果已经通过控制流体现，此节点不向上层传递值
+    } else {
+        node->val = comparison_result_val;
+    }
+
+    return true;
 }
 
 /// @brief 整数小于AST节点翻译成线性中间IR
@@ -840,43 +1017,280 @@ bool IRGenerator::ir_le(ast_node * node)
 /// @return 翻译是否成功，true：成功，false：失败
 bool IRGenerator::ir_lt(ast_node * node)
 {
-	ast_node * src1_node = node->sons[0];
-	ast_node * src2_node = node->sons[1];
+    Function * currentFunc = module->getCurrentFunction();
 
-	// 小于节点，左结合，先计算左节点，后计算右节点
+    ast_node * left_child_node = node->sons[0];
+    ast_node * right_child_node = node->sons[1];
 
-	// 小于的左边操作数
-	ast_node * left = ir_visit_ast_node(src1_node);
-	if (!left) {
-		// 某个变量没有定值
-		return false;
-	}
+    // 递归访问左右子节点以计算它们的值。
+    LabelInstruction * original_true_target = m_current_true_target;
+    LabelInstruction * original_false_target = m_current_false_target;
+    m_current_true_target = nullptr;
+    m_current_false_target = nullptr;
 
-	// 小于的右边操作数
-	ast_node * right = ir_visit_ast_node(src2_node);
-	if (!right) {
-		// 某个变量没有定值
-		return false;
-	}
+    ast_node * left_val_node = ir_visit_ast_node_recursive(left_child_node);
 
-	// 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
 
-	BinaryInstruction * ltInst = new BinaryInstruction(module->getCurrentFunction(),
-														IRInstOperator::IRINST_OP_LT_I,
-														left->val,
-														right->val,
-														IntegerType::getTypeBool());
+    ast_node * right_val_node = ir_visit_ast_node_recursive(right_child_node);
 
-	// 创建临时变量保存IR的值，以及线性IR指令
-	node->blockInsts.addInst(left->blockInsts);
-	node->blockInsts.addInst(right->blockInsts);
-	node->blockInsts.addInst(ltInst);
 
-	node->val = ltInst;
+    // 恢复 m_current_... 给当前的 LT 运算符使用
+    m_current_true_target = original_true_target;
+    m_current_false_target = original_false_target;
 
-	return true;
+    // 将子节点生成的指令添加到当前 LT 节点的指令列表中
+    node->blockInsts.addInst(left_val_node->blockInsts);
+    node->blockInsts.addInst(right_val_node->blockInsts);
+
+    // 创建比较指令 (cmp lt)
+    Type * comparison_result_type = IntegerType::getTypeBool();
+
+    BinaryInstruction * cmp_instruction =
+        new BinaryInstruction(currentFunc,
+                              IRInstOperator::IRINST_OP_LT_I, // 整数小于比较的操作码
+                              left_val_node->val,                 // %l1 (a)
+                              right_val_node->val,                // %l2 (b)
+                              comparison_result_type              // 比较结果的类型
+        );
+    node->blockInsts.addInst(cmp_instruction);
+    Value * comparison_result_val = cmp_instruction; // cmp 指令本身就是结果 Value (%t1)
+
+    // 检查是否在条件上下文中 (即父节点是否传递了真/假出口标签)
+    if (m_current_true_target && m_current_false_target) {
+        // 如果是，则生成条件跳转指令 (bc)
+        node->blockInsts.addInst(new BranchInstruction(currentFunc,
+                                                       comparison_result_val, // %t1 (比较结果)
+                                                       m_current_true_target, // label .L0 (真出口)
+                                                       m_current_false_target // label .L1 (假出口)
+                                                       ));
+        node->val = nullptr; // 结果已经通过控制流体现，此节点不向上层传递值
+    } else {
+        node->val = comparison_result_val;
+    }
+
+    return true;
 }
 
+/// @brief 逻辑与运算AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_and(ast_node * node) {
+    Function * currentFunc = module->getCurrentFunction();
+
+    // 1. 检查前提条件
+    if (!currentFunc) {
+        minic_log(LOG_ERROR, "ir_and: Current function is null for node at line %lld.", (long long)(node ? node->line_no : -1));
+        return false;
+    }
+    // 逻辑与必须在条件上下文中使用，即其父节点（如if）必须已通过 ir_visit_for_condition 设置了真假出口
+    if (!m_current_true_target || !m_current_false_target) {
+        minic_log(LOG_ERROR, "ir_and: Not called in a conditional context (true/false targets missing from m_current_... members) for node at line %lld.", (long long)(node ? node->line_no : -1));
+        // 在一个更完整的编译器中，如果 AND 的结果需要被赋值 (e.g., bool x = a && b;)，
+        // 则这里需要不同的逻辑：分别计算A和B的布尔值，然后用一个逻辑与指令（如果IR有的话）
+        // 或者通过一系列的比较和分支来得到最终的0/1。
+        // 为了符合当前“传递真假出口”的设计，我们强制它必须在条件上下文。
+        return false;
+    }
+    if (!node || node->sons.size() != 2) {
+        minic_log(LOG_ERROR, "ir_and: Invalid AND node or insufficient children at line %lld.", (long long)(node ? node->line_no : -1));
+        return false;
+    }
+
+    ast_node *left_expr_node = node->sons[0];  // BoolExpr0 (A)
+    ast_node *right_expr_node = node->sons[1]; // BoolExpr1 (B)
+
+    // 保存外部（即当前AND表达式整体）的真假出口目标，
+    // 因为在递归访问子表达式时，我们会修改 m_current_true_target / m_current_false_target
+    LabelInstruction *outer_true_target_for_and = m_current_true_target;
+    LabelInstruction *outer_false_target_for_and = m_current_false_target;
+
+    // 2. 创建中间标签 L3 (遵循您流程图的命名)
+    // L3: 如果 BoolExpr0 (A) 为真，则跳转到此标签以继续评估 BoolExpr1 (B)
+    LabelInstruction *l3_a_true_eval_b_label = new LabelInstruction(currentFunc);
+
+    // --- 翻译 BoolExpr0 (A) ---
+    // 为了翻译 A，我们需要设置 A 的真假出口：
+    // - 如果 A 为真，跳转到 l3_a_true_eval_b_label (继续评估 B)
+    // - 如果 A 为假，短路，直接跳转到整个 AND 表达式的假出口 (outer_false_target_for_and)
+    m_current_true_target = l3_a_true_eval_b_label;
+    m_current_false_target = outer_false_target_for_and; // 短路！
+
+    // 递归调用核心遍历函数来处理左操作数 A
+    if (!ir_visit_ast_node_recursive(left_expr_node)) {
+        minic_log(LOG_ERROR, "Failed to generate IR for left operand of AND at line %lld.", (long long)left_expr_node->line_no);
+        // 恢复外部的真假目标，以防万一（尽管这里失败了）
+        m_current_true_target = outer_true_target_for_and;
+        m_current_false_target = outer_false_target_for_and;
+        delete l3_a_true_eval_b_label; // 清理未使用的标签
+        return false;
+    }
+    // 将 A 生成的指令添加到当前 AND 节点的指令列表中
+    node->blockInsts.addInst(left_expr_node->blockInsts);
+    // left_expr_node->val 在这里不直接使用，因为 ir_visit_ast_node_recursive 的尾部逻辑
+    // (或者 left_expr_node 本身如果是关系/逻辑运算) 已经根据 A 的结果和
+    // 当前设置的 m_current_true_target/m_current_false_target 生成了跳转指令。
+
+    // --- 插入 L3 标签 ---
+    // 如果 A 为真，控制流会到达这里
+    node->blockInsts.addInst(l3_a_true_eval_b_label);
+
+    // --- 翻译 BoolExpr1 (B) ---
+    // 为了翻译 B，我们需要设置 B 的真假出口：
+    // - 如果 B 为真，跳转到整个 AND 表达式的真出口 (outer_true_target_for_and)
+    // - 如果 B 为假，跳转到整个 AND 表达式的假出口 (outer_false_target_for_and)
+    m_current_true_target = outer_true_target_for_and;
+    m_current_false_target = outer_false_target_for_and;
+
+    // 递归调用核心遍历函数来处理右操作数 B
+    if (!ir_visit_ast_node_recursive(right_expr_node)) {
+        minic_log(LOG_ERROR, "Failed to generate IR for right operand of AND at line %lld.", (long long)right_expr_node->line_no);
+        // 此时 m_current_... 已经被设置为外部目标，无需再次恢复到 outer_...
+        // l3_a_true_eval_b_label 已经被 addInst，由 InterCode 管理
+        return false;
+    }
+    // 将 B 生成的指令添加到当前 AND 节点的指令列表中
+    node->blockInsts.addInst(right_expr_node->blockInsts);
+    // 同样，right_expr_node->val 不直接使用，跳转已由内部处理。
+
+    node->val = nullptr;
+
+    return true;
+}
+
+/// @brief 逻辑或运算AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_or(ast_node * node) {
+	Function * currentFunc = module->getCurrentFunction();
+
+	// 1. 检查前提条件
+	if (!currentFunc) {
+		minic_log(LOG_ERROR, "ir_or: Current function is null for node at line %lld.", (long long)(node ? node->line_no : -1));
+		return false;
+	}
+	// 逻辑或必须在条件上下文中使用，即其父节点（如if）必须已通过 ir_visit_for_condition 设置了真假出口
+	if (!m_current_true_target || !m_current_false_target) {
+		minic_log(LOG_ERROR, "ir_or: Not called in a conditional context (true/false targets missing from m_current_... members) for node at line %lld.", (long long)(node ? node->line_no : -1));
+		return false;
+	}
+	if (!node || node->sons.size() != 2) {
+		minic_log(LOG_ERROR, "ir_or: Invalid OR node or insufficient children at line %lld.", (long long)(node ? node->line_no : -1));
+		return false;
+	}
+
+	ast_node *left_expr_node = node->sons[0];  // BoolExpr0 (A)
+	ast_node *right_expr_node = node->sons[1]; // BoolExpr1 (B)
+
+	// 保存外部（即当前OR表达式整体）的真假出口目标，
+	// 因为在递归访问子表达式时，我们会修改 m_current_true_target / m_current_false_target
+	LabelInstruction *outer_true_target_for_or = m_current_true_target;
+	LabelInstruction *outer_false_target_for_or = m_current_false_target;
+
+	// 2. 创建中间标签 L3 (遵循您流程图的命名)
+	// L3: 如果 BoolExpr0 (A) 为假，则跳转到此标签以继续评估 BoolExpr1 (B)
+	LabelInstruction *l3_a_false_eval_b_label = new LabelInstruction(currentFunc);
+
+	// --- 翻译 BoolExpr0 (A) ---
+	// 为了翻译 A，我们需要设置 A 的真假出口：
+	// - 如果 A 为真，短路，直接跳转到整个 OR 表达式的真出口 (outer_true_target_for_or)
+	m_current_true_target = outer_true_target_for_or; // 短路！
+    // - 如果 A 为假，跳转到 l3_a_false_eval_b
+    m_current_false_target = l3_a_false_eval_b_label; // 如果 A 为假，跳转到 l3_a_false_eval_b_label
+
+    // 递归调用核心遍历函数来处理左操作数 A
+    if (!ir_visit_ast_node_recursive(left_expr_node)) {
+        minic_log(LOG_ERROR,
+                  "Failed to generate IR for left operand of OR at line %lld.",
+                  (long long) left_expr_node->line_no);
+        // 恢复外部的真假目标，以防万一（尽管这里失败了）
+        m_current_true_target = outer_true_target_for_or;
+        m_current_false_target = outer_false_target_for_or;
+        delete l3_a_false_eval_b_label; // 清理未使用的标签
+        return false;
+    }
+    // 将 A 生成的指令添加到当前 OR 节点的指令列表中
+    node->blockInsts.addInst(left_expr_node->blockInsts);
+
+    // --- 插入 L3 标签 ---
+    // 如果 A 为假，控制流会到达这里
+    node->blockInsts.addInst(l3_a_false_eval_b_label);
+    // --- 翻译 BoolExpr1 (B) ---
+    // 为了翻译 B，我们需要设置 B 的真假出口：
+    // - 如果 B 为真，跳转到整个 OR 表达式的真出口 (outer_true_target_for_or)
+    // - 如果 B 为假，跳转到整个 OR 表达式的假出口 (outer_false_target_for_or)
+    m_current_true_target = outer_true_target_for_or;
+    m_current_false_target = outer_false_target_for_or;
+
+    // 递归调用核心遍历函数来处理右操作数 B
+    if (!ir_visit_ast_node_recursive(right_expr_node)) {
+		minic_log(LOG_ERROR,
+				  "Failed to generate IR for right operand of OR at line %lld.",
+				  (long long) right_expr_node->line_no);
+		// 此时 m_current_... 已经被设置为外部目标，无需再次恢复到 outer_...
+		// l3_a_false_eval_b_label 已经被 addInst，由 InterCode 管理
+		return false;
+	}
+	// 将 B 生成的指令添加到当前 OR 节点的指令列表中
+	node->blockInsts.addInst(right_expr_node->blockInsts);
+	// 同样，right_expr_node->val 不直接使用，跳转已由内部处理。
+
+    node->val = nullptr;
+    
+    return true;
+}
+
+/// @brief 非运算AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_not(ast_node * node)
+{
+    Function * currentFunc = module->getCurrentFunction();
+
+    if (!currentFunc || !node || node->sons.empty()) {
+        minic_log(LOG_ERROR,
+                  "ir_not: Invalid arguments or context for node at line %lld.",
+                  (long long) (node ? node->line_no : -1));
+        return false;
+    }
+    // 逻辑非必须在条件上下文中使用
+    if (!m_current_true_target || !m_current_false_target) {
+        minic_log(LOG_ERROR,
+                  "ir_not: Not called in a conditional context for node at line %lld.",
+                  (long long) node->line_no);
+        // 如果 NOT 的结果需要赋值 (e.g., bool x = !a;)，则需要不同的逻辑：
+        // 1. 计算 a 的布尔值 (val_a)。
+        // 2. 生成一个指令 result = logical_not val_a (或 result = (val_a == 0)).
+        // 3. node->val = result.
+        // 为了符合当前设计，我们强制它在条件上下文。
+        return false;
+    }
+
+    ast_node * operand_A_node = node->sons[0];
+
+    // 保存外部（即当前 NOT 表达式整体）的真假出口目标
+    LabelInstruction * outer_true_target_for_not = m_current_true_target;
+    LabelInstruction * outer_false_target_for_not = m_current_false_target;
+
+    // 关键：设置 m_current_... 为交换后的目标，然后递归处理操作数 A
+    m_current_true_target = outer_false_target_for_not; // 如果 A 为真，!A 为假，跳到 !A 的假出口
+    m_current_false_target = outer_true_target_for_not; // 如果 A 为假，!A 为真，跳到 !A 的真出口
+
+    if (!ir_visit_ast_node_recursive(operand_A_node)) {
+        minic_log(LOG_ERROR,
+                  "Failed to process operand for NOT operation at line %lld.",
+                  (long long) operand_A_node->line_no);
+        // 恢复外部目标
+        m_current_true_target = outer_true_target_for_not;
+        m_current_false_target = outer_false_target_for_not;
+        return false;
+    }
+
+    // 将操作数 A 生成的指令添加到 NOT 节点的指令列表中
+    node->blockInsts.addInst(operand_A_node->blockInsts);
+
+    node->val = nullptr; // 结果通过控制流体现
+    return true;
+}
 
 /// @brief 赋值AST节点翻译成线性中间IR
 /// @param node AST节点
@@ -970,18 +1384,15 @@ bool IRGenerator::ir_if(ast_node * node)
 {
     Function * currentFunc = module->getCurrentFunction();
     if (!currentFunc) {
-        // 通常不应该在没有当前函数上下文的情况下处理if语句
         minic_log(LOG_ERROR, "IRGenerator::ir_if called outside of a function context.");
         return false;
     }
 
-    // if 语句的AST结构通常是:
-    // node->sons[0]: 条件表达式 (condition)
-    // node->sons[1]: then 语句块 (then_block)
-    // node->sons[2]: (可选) else 语句块 (else_block)
-
+    // AST结构: node->sons[0]=condition, node->sons[1]=then_block, node->sons[2]=else_block (optional)
     if (node->sons.size() < 2) {
-        minic_log(LOG_ERROR, "Invalid if statement AST node: missing condition or then-block.");
+        minic_log(LOG_ERROR,
+                  "Invalid if statement AST node: missing condition or then-block at line %lld.",
+                  (long long) (node ? node->line_no : -1));
         return false;
     }
 
@@ -995,79 +1406,75 @@ bool IRGenerator::ir_if(ast_node * node)
     }
 
     // 1. 创建需要的标签
-    LabelInstruction * then_label = new LabelInstruction(currentFunc);
-    LabelInstruction * else_label = nullptr; // 只有在有else分支时才创建
-    LabelInstruction * end_if_label = new LabelInstruction(currentFunc);
+    LabelInstruction * then_label = new LabelInstruction(currentFunc); // 真出口 (then 块的开始)
+    LabelInstruction * else_actual_label = nullptr;                    // 假出口 (else 块的开始, 如果有 else)
+    LabelInstruction * end_if_label = new LabelInstruction(currentFunc); // if 语句结束后的汇合点
 
     if (has_else) {
-        else_label = new LabelInstruction(currentFunc);
+        else_actual_label = new LabelInstruction(currentFunc);
     }
 
-    // 2. 翻译条件表达式
-    if (!ir_visit_ast_node(cond_node)) {
+    // 确定条件为假时的跳转目标：
+    // - 如果有 else 块，则跳转到 else_actual_label
+    // - 如果没有 else 块，则直接跳转到 end_if_label (跳过 then 块)
+    LabelInstruction * false_target_for_condition = has_else ? else_actual_label : end_if_label;
+
+    // 2. 翻译条件表达式 (cond_node)，并传递真/假出口标签
+    //    ir_visit_for_condition 会负责让 cond_node 生成跳转到 then_label (如果为真)
+    //    或 false_target_for_condition (如果为假) 的指令。
+    if (!ir_visit_for_condition(cond_node, then_label, false_target_for_condition)) {
         minic_log(LOG_ERROR, "Failed to generate IR for if-condition at line %lld.", (long long) cond_node->line_no);
-        // 清理已创建的标签，因为它们不会被加入指令流
+        // 清理已创建的标签
         delete then_label;
-        if (else_label)
-            delete else_label;
+        if (else_actual_label)
+            delete else_actual_label;
         delete end_if_label;
         return false;
     }
-    // 条件表达式生成的指令加入到if节点的指令列表中
+    // 将条件表达式生成的所有指令 (包括其内部的 cmp 和 bc/BranchInstruction)
+    // 添加到 if 语句节点的指令列表中。
     node->blockInsts.addInst(cond_node->blockInsts);
-    Value * cond_val = cond_node->val; // 条件表达式的结果 Value
 
-    if (!cond_val) {
-        minic_log(LOG_ERROR, "If-condition at line %lld did not produce a value.", (long long) cond_node->line_no);
-        delete then_label;
-        if (else_label)
-            delete else_label;
-        delete end_if_label;
-        return false;
-    }
-    // TODO: 可能需要检查 cond_val 的类型是否可以用于条件判断 (例如，bool 或 int)
-
-    // 3. 创建条件跳转指令
-    // BranchInstruction(currentFunc, cond_val, true_target, false_target)
-    // 如果 cond_val 为真, 跳转到 true_target, 否则跳转到 false_target.
-    // true_target 总是 then_label.
-    // false_target 是 else_label (如果有else) 或 end_if_label (如果没有else).
-    LabelInstruction * false_target_for_branch = has_else ? else_label : end_if_label;
-
-
-    node->blockInsts.addInst(new BranchInstruction(currentFunc, cond_val, then_label, false_target_for_branch));
-
-    // 4. 添加 then_label 并翻译 then_block
+    // 3. 添加 then_label 标记 then 块的开始，并翻译 then_block
     node->blockInsts.addInst(then_label);
-    if (!ir_visit_ast_node(then_node)) {
+    // 翻译 then_block 时，我们使用普通的 ir_visit_ast_node，因为它不是一个条件上下文
+    ast_node * processed_then_node = ir_visit_ast_node(then_node);
+    if (!processed_then_node) {
         minic_log(LOG_ERROR, "Failed to generate IR for if-then block at line %lld.", (long long) then_node->line_no);
-        // 注意：此时标签可能已经加入 blockInsts，错误处理时 InterCode 应负责清理其内容
+        // 标签可能已加入 InterCode，应由其管理，但如果这里要手动清理，需小心
+        // delete else_actual_label; (if created and not added)
+        // delete end_if_label; (if not added)
         return false;
     }
-    node->blockInsts.addInst(then_node->blockInsts);
+    node->blockInsts.addInst(processed_then_node->blockInsts);
 
-    // 5. 处理 else_block (如果存在)
+    // 4. 处理 else_block (如果存在)
     if (has_else) {
-        // 在 then_block 之后，需要一个无条件跳转到 end_if_label，以跳过 else_block
+        // 在 then_block 执行完毕后，必须无条件跳转到 end_if_label，以跳过 else_block
         node->blockInsts.addInst(new GotoInstruction(currentFunc, end_if_label));
 
-        // 添加 else_label 并翻译 else_block
-        node->blockInsts.addInst(else_label);
-        if (!ir_visit_ast_node(else_node)) {
+        // 添加 else_actual_label 标记 else 块的开始
+        node->blockInsts.addInst(else_actual_label);
+
+        // 翻译 else_block
+        ast_node * processed_else_node = ir_visit_ast_node(else_node);
+        if (!processed_else_node) {
             minic_log(LOG_ERROR,
                       "Failed to generate IR for if-else block at line %lld.",
                       (long long) else_node->line_no);
+            // delete end_if_label; (if not added)
             return false;
         }
-        node->blockInsts.addInst(else_node->blockInsts);
+        node->blockInsts.addInst(processed_else_node->blockInsts);
+        // else_block 执行完毕后会自然流向 end_if_label
     }
-    // 如果没有 else, false_target_for_branch 已经指向 end_if_label,
-    // 并且 then_block 执行完毕后会自然流向 end_if_label (除非then_block有自己的跳转如return)
+    // 如果没有 else, 并且原始条件为假，则 false_target_for_condition (即 end_if_label) 会被跳转到。
+    // 如果原始条件为真，then_block 执行完毕后会自然流向 end_if_label (因为没有 else 分支后的 goto)。
 
-    // 6. 添加 end_if_label
+    // 5. 添加 end_if_label 作为 if 语句的汇合点
     node->blockInsts.addInst(end_if_label);
 
-    // if 语句本身不产生值，所以 node->val 保持不变 (或设为nullptr)
+    // if 语句本身不产生值
     node->val = nullptr;
 
     return true;

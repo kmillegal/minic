@@ -301,10 +301,7 @@ std::any MiniCCSTVisitor::visitLorExp(MiniCParser::LorExpContext * ctx)
 std::any MiniCCSTVisitor::visitLandExp(MiniCParser::LandExpContext * ctx)
 {
 	// 识别产生式：landExp: eqExp (T_AND eqExp)*;
-    int x;
-    x = ctx->eqExp().size();
-    if (x == 1)
-    {
+    if (ctx->eqExp().size() == 1) {
         return visitEqExp(ctx->eqExp()[0]);
     }
 

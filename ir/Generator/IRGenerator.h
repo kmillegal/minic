@@ -20,6 +20,7 @@
 
 #include "AST.h"
 #include "Module.h"
+#include "LabelInstruction.h"
 
 /// @brief AST遍历产生线性IR类
 class IRGenerator {
@@ -137,7 +138,6 @@ protected:
     /// @return 翻译是否成功，true：成功，false：失败
     bool ir_not(ast_node * node);
 
-
     /// @brief 赋值AST节点翻译成线性中间IR
     /// @param node AST节点
     /// @return 翻译是否成功，true：成功，false：失败
@@ -193,6 +193,13 @@ protected:
     /// @return 成功返回node节点，否则返回nullptr
     ast_node * ir_visit_ast_node(ast_node * node);
 
+    /// @brief 访问AST节点，用于将其作为条件处理，并根据结果跳转。
+    /// @param node AST节点。
+    /// @param true_target 如果 node 求值为真，则跳转到此标签。
+    /// @param false_target 如果 node 求值为假，则跳转到此标签。
+    /// @return 处理是否成功。node->blockInsts 将包含生成的指令。
+    bool ir_visit_node_for_condition(ast_node * node, LabelInstruction * true_target, LabelInstruction * false_target);
+
     /// @brief AST的节点操作函数
     typedef bool (IRGenerator::*ast2ir_handler_t)(ast_node *);
 
@@ -205,4 +212,13 @@ private:
 
     /// @brief 符号表:模块
     Module * module;
+
+    LabelInstruction * m_current_true_target;
+    LabelInstruction * m_current_false_target;
+
+    // 核心递归访问函数
+    ast_node * ir_visit_ast_node_recursive(ast_node * node);
+
+    /// @brief 访问AST节点，用于将其作为条件处理，并根据结果跳转。
+    bool ir_visit_for_condition(ast_node * cond_node, LabelInstruction * true_target, LabelInstruction * false_target);
 };

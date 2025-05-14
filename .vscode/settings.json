@@ -1,6 +1,6 @@
 {
 	"tabnine.experimentalAutoImports": true,
-	"editor.fontFamily": "'FiraCode NFM',monospace,'Courier New',Menlo,Monaco",
+	"editor.fontFamily": "JetBrains Mono",
 	"editor.fontSize": 16,
 	"editor.fontLigatures": true,
 	"editor.linkedEditing": true,
