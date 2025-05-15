@@ -282,7 +282,7 @@ ast_node * create_func_def(type_attr & type, var_id_attr & id, ast_node * block_
 /// @param line_no 行号
 /// @param param_name 形式参数名
 /// @return 创建的节点
-ast_node * create_func_formal_param(uint32_t line_no, const char * param_name);
+ast_node * create_func_formal_param(type_attr & type, uint32_t line_no, const char * param_name);
 
 /// @brief 创建函数调用的节点
 /// @param funcname_node 函数名节点

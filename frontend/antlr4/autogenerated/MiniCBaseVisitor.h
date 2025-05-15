@@ -1,5 +1,5 @@
 
-// Generated from /home/code/exp/exp04-minic-expr/frontend/antlr4/MiniC.g4 by ANTLR 4.12.0
+// Generated from MiniC.g4 by ANTLR 4.13.2
 
 #pragma once
 
@@ -16,6 +16,10 @@ class  MiniCBaseVisitor : public MiniCVisitor {
 public:
 
   virtual std::any visitCompileUnit(MiniCParser::CompileUnitContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitFormalParamList(MiniCParser::FormalParamListContext *ctx) override {
     return visitChildren(ctx);
   }
 

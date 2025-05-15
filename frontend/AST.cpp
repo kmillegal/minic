@@ -249,6 +249,30 @@ ast_node * create_func_def(type_attr & type, var_id_attr & id, ast_node * block_
     return create_func_def(type_node, id_node, block_node, params_node);
 }
 
+/// @brief 创建函数形式参数的节点
+/// @param line_no 行号
+/// @param type 节点值类型
+/// @param id 节点值
+/// @return 创建的节点
+ast_node * create_func_formal_param(type_attr & type, uint32_t line_no, const char * param_name)
+{
+	// 创建标识符终结符节点
+	ast_node * id_node = ast_node::New(param_name, line_no);
+
+    ast_node * type_ast_node = create_type_node(type);
+    // 创建函数形式参数节点
+	ast_node * param_node = new ast_node(ast_operator_type::AST_OP_FUNC_FORMAL_PARAM, VoidType::getType(), line_no);
+
+	// 设置函数名
+    param_node->name = id_node->name;
+    
+    (void) param_node->insert_son_node(type_ast_node);
+    (void) param_node->insert_son_node(id_node);
+
+
+	return param_node;
+}
+
 /// @brief 创建AST的内部节点
 /// @param node_type 节点类型
 /// @param first_child 第一个孩子节点
@@ -285,6 +309,7 @@ Type * typeAttr2Type(type_attr & attr)
         return VoidType::getType();
     }
 }
+
 
 /// @brief 创建类型节点
 /// @param type 类型信息

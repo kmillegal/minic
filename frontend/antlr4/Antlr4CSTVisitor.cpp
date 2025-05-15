@@ -74,11 +74,69 @@ std::any MiniCCSTVisitor::visitCompileUnit(MiniCParser::CompileUnitContext * ctx
     return compileUnitNode;
 }
 
+///  @brief 非终结运算符formalParamList的遍历
+/// @param ctx CST上下文
+std::any MiniCCSTVisitor::visitFormalParamList(MiniCParser::FormalParamListContext * ctx)
+{
+    // 识别的文法产生式：formalParamList : basicType T_ID (T_COMMA basicType T_ID)*;
+    // 创建代表整个形参列表的 AST 节点 (AST_OP_FUNC_FORMAL_PARAMS)
+    ast_node * formal_params_list_node = create_contain_node(ast_operator_type::AST_OP_FUNC_FORMAL_PARAMS);
+    if (!formal_params_list_node) {
+        std::cerr << "Error: Failed to create AST_OP_FUNC_FORMAL_PARAMS node." << std::endl;
+        // 根据你的错误处理策略，可能返回一个空的 std::any 或抛出异常
+        return std::any{}; // 或者 return nullptr; 如果你的 std::any 可以存 nullptr
+    }
+
+    // 获取所有 basicType 上下文对象 (用于行号和可能的未来类型扩展)
+    
+    auto typeContexts = ctx->basicType();
+    // 获取所有 T_ID 终端节点 (用于名称和行号)
+    auto idNodes = ctx->T_ID();
+
+    // 2. 遍历每一对 (basicType, T_ID) 来处理每个形参
+    for (size_t i = 0; i < idNodes.size(); ++i) {
+        MiniCParser::BasicTypeContext * currentTypeCtx = typeContexts[i];
+        antlr4::tree::TerminalNode * currentIdNode = idNodes[i];
+
+        //  获取参数类型
+        type_attr param_type_attribute;
+        std::any type_attr_any = visitBasicType(currentTypeCtx);
+        if (type_attr_any.has_value() && type_attr_any.type() == typeid(type_attr)) {
+            param_type_attribute = std::any_cast<type_attr>(type_attr_any);
+        } else {
+            std::cerr << "Error: visitBasicType did not return a valid type_attr for parameter '"
+                      << currentIdNode->getText() << "'." << std::endl;
+            continue;
+        }
+        // 获取参数名称
+        std::string param_name_str = currentIdNode->getText();
+        const char * param_name_cstr = param_name_str.c_str();
+
+        // 获取参数ID的行号 (create_func_formal_param 需要 uint32_t)
+        uint32_t param_line_no = static_cast<uint32_t>(currentIdNode->getSymbol()->getLine());
+
+        //  调用 create_func_formal_param 创建单个形参的 AST 节点
+        ast_node * single_formal_param_node = create_func_formal_param(param_type_attribute,param_line_no, param_name_cstr);
+
+        // 2d. 将创建的单个形参节点添加到形参列表节点的子节点中
+        if (!formal_params_list_node->insert_son_node(single_formal_param_node)) {
+            std::cerr << "Error: Failed to insert formal parameter '" << param_name_str << "' into parameter list node."
+                      << std::endl;
+            // 清理 single_formal_param_node 因为它没有被成功插入
+            delete single_formal_param_node; // 假设 ast_node 需要手动 delete 如果未被父节点接管
+            // 可以选择继续或中止
+            continue;
+        }
+    }
+
+    // 3. 返回包装了整个形参列表节点的 std::any
+    return std::any(formal_params_list_node);
+}
 /// @brief 非终结运算符funcDef的遍历
 /// @param ctx CST上下文
 std::any MiniCCSTVisitor::visitFuncDef(MiniCParser::FuncDefContext * ctx)
 {
-    // 识别的文法产生式：funcDef : T_INT T_ID T_L_PAREN T_R_PAREN block;
+    // 识别的文法产生式：funcDef : T_INT T_ID T_L_PAREN formalParamList? T_R_PAREN block;
 
     // 函数返回类型，终结符
     type_attr funcReturnType{BasicType::TYPE_INT, (int64_t) ctx->T_INT()->getSymbol()->getLine()};
@@ -88,13 +146,32 @@ std::any MiniCCSTVisitor::visitFuncDef(MiniCParser::FuncDefContext * ctx)
 
     var_id_attr funcId{id, (int64_t) ctx->T_ID()->getSymbol()->getLine()};
 
-    // 形参结点目前没有，设置为空指针
-    ast_node * formalParamsNode = nullptr;
+    // 形参结点
+    ast_node * formalParamsNode = nullptr; // 初始化为 nullptr
+    MiniCParser::FormalParamListContext * formalParamListCtx = ctx->formalParamList();
+
+    if (formalParamListCtx != nullptr) {
+        // 只有当源代码中存在形参列表时，才调用 visitFormalParamList
+        std::any result_any = visitFormalParamList(formalParamListCtx);
+        if (result_any.has_value()) {
+            try {
+                formalParamsNode = std::any_cast<ast_node *>(result_any);
+                // 如果 std::any_cast 成功，但结果是 nullptr (即 visitFormalParamList 返回了 std::any(nullptr))
+                // formalParamsNode 已经是 nullptr 了，符合预期
+            } catch (const std::bad_any_cast & e) {
+                std::cerr << "Warning: visitFormalParamList returned non-ast_node* type for function " << id
+                          << ". Error: " << e.what() << ". Assuming no formal parameters." << std::endl;
+                formalParamsNode = nullptr; // 确保为 nullptr
+            }
+        } else {
+            formalParamsNode = nullptr; // 确保为 nullptr
+        }
+    }
 
     // 遍历block结点创建函数体节点，非终结符
     auto blockNode = std::any_cast<ast_node *>(visitBlock(ctx->block()));
 
-    // 创建函数定义的节点，孩子有类型，函数名，语句块和形参(实际上无)
+    // 创建函数定义的节点，孩子有类型，函数名，语句块和形参
     // create_func_def函数内会释放funcId中指向的标识符空间，切记，之后不要再释放，之前一定要是通过strdup函数或者malloc分配的空间
     return create_func_def(funcReturnType, funcId, blockNode, formalParamsNode);
 }
