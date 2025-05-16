@@ -16,8 +16,8 @@ public:
     T_ASSIGN = 6, T_EQ = 7, T_NE = 8, T_LE = 9, T_LT = 10, T_GE = 11, T_GT = 12, 
     T_AND = 13, T_OR = 14, T_NOT = 15, T_COMMA = 16, T_ADD = 17, T_SUB = 18, 
     T_MUL = 19, T_DIV = 20, T_MOD = 21, T_RETURN = 22, T_INT = 23, T_VOID = 24, 
-    T_IF = 25, T_ELSE = 26, T_WHILE = 27, T_ID = 28, T_DIGIT = 29, SL_COMMENT = 30, 
-    ML_COMMENT = 31, WS = 32
+    T_IF = 25, T_ELSE = 26, T_WHILE = 27, T_BREAK = 28, T_CONTINUE = 29, 
+    T_ID = 30, T_DIGIT = 31, SL_COMMENT = 32, ML_COMMENT = 33, WS = 34
   };
 
   enum {
@@ -259,12 +259,32 @@ public:
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
+  class  BreakStatementContext : public StatementContext {
+  public:
+    BreakStatementContext(StatementContext *ctx);
+
+    antlr4::tree::TerminalNode *T_BREAK();
+    antlr4::tree::TerminalNode *T_SEMICOLON();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
   class  ExpressionStatementContext : public StatementContext {
   public:
     ExpressionStatementContext(StatementContext *ctx);
 
     antlr4::tree::TerminalNode *T_SEMICOLON();
     ExprContext *expr();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  ContinueStatementContext : public StatementContext {
+  public:
+    ContinueStatementContext(StatementContext *ctx);
+
+    antlr4::tree::TerminalNode *T_CONTINUE();
+    antlr4::tree::TerminalNode *T_SEMICOLON();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };

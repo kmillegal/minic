@@ -45,7 +45,9 @@ statement:
 	| block								# blockStatement
 	| expr? T_SEMICOLON					# expressionStatement
 	| T_IF T_L_PAREN expr T_R_PAREN statement (T_ELSE statement)? # ifStatement // 新增：if语句
-	| T_WHILE T_L_PAREN expr T_R_PAREN statement # whileStatement; // 新增：while语句
+	| T_WHILE T_L_PAREN expr T_R_PAREN statement # whileStatement // 新增：while语句
+	| T_BREAK T_SEMICOLON				# breakStatement
+	| T_CONTINUE T_SEMICOLON			# continueStatement;
 
 	// 表达式文法 expr : lorExp
 expr: lorExp;
@@ -129,6 +131,8 @@ T_VOID: 'void';
 T_IF: 'if';
 T_ELSE: 'else';
 T_WHILE: 'while';
+T_BREAK: 'break';
+T_CONTINUE: 'continue';
 
 T_ID: [a-zA-Z_][a-zA-Z0-9_]*;
 // 无符号整数定义，支持十进制、八进制和十六进制 十六进制以 0x 或 0X 开头，后跟十六进制数字 [0-9a-fA-F]+ 八进制以 0 开头，后跟零个或多个八进制数字 [0-7]*

@@ -158,6 +158,21 @@ protected:
     /// @return 翻译是否成功，true：成功，false：失败
     bool ir_if(ast_node * node);
 
+    /// @brief while节点翻译成线性中间IR
+    /// @param node AST节点
+    /// @return 翻译是否成功，true：成功，false：失败
+    bool ir_while(ast_node * node);
+
+    /// @brief break节点翻译成线性中间IR
+    /// @param node AST节点
+    /// @return 翻译是否成功，true：成功，false：失败
+    bool ir_break(ast_node * node);
+
+    /// @brief continue节点翻译成线性中间IR
+    /// @param node AST节点
+    /// @return 翻译是否成功，true：成功，false：失败
+    bool ir_continue(ast_node * node);
+
     /// @brief 类型叶子节点翻译成线性中间IR
     /// @param node AST节点
     /// @return 翻译是否成功，true：成功，false：失败
@@ -220,6 +235,9 @@ private:
 
     LabelInstruction * m_current_true_target;
     LabelInstruction * m_current_false_target;
+
+    LabelInstruction * m_current_loop_start_label; // 当前循环的开始标签
+    LabelInstruction * m_current_loop_end_label;   // 当前循环的结束标签
 
     std::vector<FormalParam *> m_collected_formal_params; //  用于收集当前函数的形参
     int current_formal_param_index_; // 用于跟踪当前函数定义的形式参数索引

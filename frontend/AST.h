@@ -135,6 +135,12 @@ enum class ast_operator_type : int {
     /// @brief WHILE语句运算符
     AST_OP_WHILE,
 
+    /// @brief BREAK语句运算符
+    AST_OP_BREAK,
+
+    /// @brief CONTINUE语句运算符
+    AST_OP_CONTINUE,
+
     /// @brief 最大标识符，表示非法运算符
     AST_OP_MAX,
 };

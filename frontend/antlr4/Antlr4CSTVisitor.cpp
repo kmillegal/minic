@@ -254,6 +254,10 @@ std::any MiniCCSTVisitor::visitStatement(MiniCParser::StatementContext * ctx)
 		return visitIfStatement(exprCtx);
     } else if (Instanceof(exprCtx, MiniCParser::WhileStatementContext *, ctx)) {
 		return visitWhileStatement(exprCtx);
+    } else if (Instanceof(exprCtx, MiniCParser::BreakStatementContext *, ctx)) {
+		return visitBreakStatement(exprCtx);
+    } else if (Instanceof(exprCtx, MiniCParser::ContinueStatementContext *, ctx)) {
+		return visitContinueStatement(exprCtx);
 	}
 
     return nullptr;
@@ -335,6 +339,25 @@ std::any MiniCCSTVisitor::visitWhileStatement(MiniCParser::WhileStatementContext
 	return create_contain_node(ast_operator_type::AST_OP_WHILE, exprNode, whileBlockNode);
 }
 
+/// @brief 非终结运算符statement中的BreakStatement的遍历
+/// @param ctx CST上下文
+std::any MiniCCSTVisitor::visitBreakStatement(MiniCParser::BreakStatementContext * ctx)
+{
+	// 识别的文法产生式：breakStatement : T_BREAK T_SEMICOLON;
+
+	// 创建一个AST_OP_BREAK类型的中间节点
+	return create_contain_node(ast_operator_type::AST_OP_BREAK);
+}
+
+/// @brief 非终结运算符statement中的ContinueStatement的遍历
+/// @param ctx CST上下文
+std::any MiniCCSTVisitor::visitContinueStatement(MiniCParser::ContinueStatementContext * ctx)
+{
+	// 识别的文法产生式：continueStatement : T_CONTINUE T_SEMICOLON;
+
+	// 创建一个AST_OP_CONTINUE类型的中间节点
+	return create_contain_node(ast_operator_type::AST_OP_CONTINUE);
+}
 
 /// @brief 非终结运算符expr的遍历
 /// @param ctx CST上下文

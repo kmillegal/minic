@@ -68,6 +68,9 @@ IRGenerator::IRGenerator(ast_node * _root, Module * _module) : root(_root), modu
     ast2ir_handlers[ast_operator_type::AST_OP_ASSIGN] = &IRGenerator::ir_assign;
     ast2ir_handlers[ast_operator_type::AST_OP_RETURN] = &IRGenerator::ir_return;
     ast2ir_handlers[ast_operator_type::AST_OP_IF] = &IRGenerator::ir_if;
+    ast2ir_handlers[ast_operator_type::AST_OP_WHILE] = &IRGenerator::ir_while;
+    ast2ir_handlers[ast_operator_type::AST_OP_BREAK] = &IRGenerator::ir_break;
+    ast2ir_handlers[ast_operator_type::AST_OP_CONTINUE] = &IRGenerator::ir_continue;
 
     /* 函数调用 */
     ast2ir_handlers[ast_operator_type::AST_OP_FUNC_CALL] = &IRGenerator::ir_function_call;
@@ -689,27 +692,37 @@ bool IRGenerator::ir_sub(ast_node * node)
 /// @return 翻译是否成功，true：成功，false：失败
 bool IRGenerator::ir_minus(ast_node * node)
 {
-	ast_node * src1_node = node->sons[0];
 
-	// 一元减法节点，直接计算左节点
+    Function * currentFunc = module->getCurrentFunction(); // Get current function context
+    ast_node * src1_node = node->sons[0];
+
+    LabelInstruction * original_true_target = m_current_true_target;
+    LabelInstruction * original_false_target = m_current_false_target;
+    m_current_true_target = nullptr;
+    m_current_false_target = nullptr;
+
+    // 一元减法节点，直接计算左节点
 
 	// 一元减法的操作数
 	ast_node * left = ir_visit_ast_node(src1_node);
 	if (!left) {
 		// 某个变量没有定值
 		return false;
-	}
+    }
+    m_current_true_target = original_true_target;
+    m_current_false_target = original_false_target;
 
-	// 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
+    node->blockInsts.addInst(left->blockInsts);
+    // 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
 
-	BinaryInstruction * minusInst = new BinaryInstruction(module->getCurrentFunction(),
+	BinaryInstruction * minusInst = new BinaryInstruction(currentFunc,
 														IRInstOperator::IRINST_OP_NEG_I,
 														left->val,
 														nullptr,
 														IntegerType::getTypeInt());
 
 	// 创建临时变量保存IR的值，以及线性IR指令
-	node->blockInsts.addInst(left->blockInsts);
+	//node->blockInsts.addInst(left->blockInsts);
 	node->blockInsts.addInst(minusInst);
 
 	node->val = minusInst;
@@ -1356,52 +1369,90 @@ bool IRGenerator::ir_or(ast_node * node) {
 bool IRGenerator::ir_not(ast_node * node)
 {
     Function * currentFunc = module->getCurrentFunction();
-
-    if (!currentFunc || !node || node->sons.empty()) {
-        minic_log(LOG_ERROR,
-                  "ir_not: Invalid arguments or context for node at line %lld.",
-                  (long long) (node ? node->line_no : -1));
+    if (!currentFunc) {
+        minic_log(LOG_ERROR, "ir_not: Called outside of a function context.");
         return false;
     }
-    // 逻辑非必须在条件上下文中使用
-    if (!m_current_true_target || !m_current_false_target) {
-        minic_log(LOG_ERROR,
-                  "ir_not: Not called in a conditional context for node at line %lld.",
-                  (long long) node->line_no);
-        // 如果 NOT 的结果需要赋值 (e.g., bool x = !a;)，则需要不同的逻辑：
-        // 1. 计算 a 的布尔值 (val_a)。
-        // 2. 生成一个指令 result = logical_not val_a (或 result = (val_a == 0)).
-        // 3. node->val = result.
-        // 为了符合当前设计，我们强制它在条件上下文。
+    if (!node || node->sons.empty()) {
+        minic_log(LOG_ERROR, "ir_not: Invalid node or missing operand.");
         return false;
     }
 
     ast_node * operand_A_node = node->sons[0];
 
-    // 保存外部（即当前 NOT 表达式整体）的真假出口目标
-    LabelInstruction * outer_true_target_for_not = m_current_true_target;
-    LabelInstruction * outer_false_target_for_not = m_current_false_target;
+    // Check if we are in a conditional context (passed down from if/while via ir_visit_for_condition)
+    if (m_current_true_target && m_current_false_target) {
+        // Conditional context: Invert the logic by swapping true/false targets for the operand.
+        LabelInstruction * original_true_target = m_current_true_target;
+        LabelInstruction * original_false_target = m_current_false_target;
 
-    // 关键：设置 m_current_... 为交换后的目标，然后递归处理操作数 A
-    m_current_true_target = outer_false_target_for_not; // 如果 A 为真，!A 为假，跳到 !A 的假出口
-    m_current_false_target = outer_true_target_for_not; // 如果 A 为假，!A 为真，跳到 !A 的真出口
+        // Set operand's true target to current NOT's false target, and vice-versa
+        m_current_true_target = original_false_target;
+        m_current_false_target = original_true_target;
 
-    if (!ir_visit_ast_node_recursive(operand_A_node)) {
-        minic_log(LOG_ERROR,
-                  "Failed to process operand for NOT operation at line %lld.",
-                  (long long) operand_A_node->line_no);
-        // 恢复外部目标
-        m_current_true_target = outer_true_target_for_not;
-        m_current_false_target = outer_false_target_for_not;
-        return false;
+        // Visit operand A with the swapped targets.
+        // It will generate its own branches or further propagate these swapped targets.
+        if (!ir_visit_ast_node_recursive(operand_A_node)) {
+            // Restore original targets on failure
+            m_current_true_target = original_true_target;
+            m_current_false_target = original_false_target;
+            return false;
+        }
+        node->blockInsts.addInst(operand_A_node->blockInsts);
+
+        // Restore original targets for subsequent operations at the same AST level as this NOT.
+        m_current_true_target = original_true_target;
+        m_current_false_target = original_false_target;
+
+        node->val = nullptr; // Result is expressed through control flow generated by operand_A_node
+    } else {
+        // Value context: We need to produce a 0 or 1.
+        // Ensure operand_A_node is evaluated to a value (temporarily null out targets for it).
+        LabelInstruction * temp_true_target_for_operand = m_current_true_target;   // Should be null here
+        LabelInstruction * temp_false_target_for_operand = m_current_false_target; // Should be null here
+        // Defensive: ensure they are null for operand value calculation.
+        m_current_true_target = nullptr;
+        m_current_false_target = nullptr;
+
+        ast_node * processed_operand_A = ir_visit_ast_node_recursive(operand_A_node);
+
+        // Restore whatever targets were (or were not) active before this value-context NOT.
+        m_current_true_target = temp_true_target_for_operand;
+        m_current_false_target = temp_false_target_for_operand;
+
+        if (!processed_operand_A || !processed_operand_A->val) {
+            minic_log(LOG_ERROR,
+                      "Operand of NOT (in value context) did not produce a value at line %lld.",
+                      (long long) (operand_A_node ? operand_A_node->line_no : node->line_no));
+            return false;
+        }
+        node->blockInsts.addInst(processed_operand_A->blockInsts);
+
+        // C-style NOT: result is 1 if operand is 0, else 0.
+        if (!processed_operand_A->val->getType()->isIntegerType() &&
+            !processed_operand_A->val->getType()->isInt1Byte()) {
+            minic_log(LOG_ERROR,
+                      "Logical NOT applied to non-integer/non-boolean type at line %lld",
+                      (long long) (operand_A_node ? operand_A_node->line_no : node->line_no));
+            return false;
+        }
+
+        Value * zero = module->newConstInt(0);         // Create a constant 0 Value
+        Type * bool_type = IntegerType::getTypeBool(); // Result of NOT is boolean (typically int 0 or 1)
+
+        BinaryInstruction * eq_instr =
+            new BinaryInstruction(currentFunc,
+                                  IRInstOperator::IRINST_OP_EQ_I, // Test if operand is equal to 0
+                                  processed_operand_A->val,
+                                  zero,
+                                  bool_type);
+        node->blockInsts.addInst(eq_instr);
+        node->val = eq_instr; // The result of NOT is the result of this EQ instruction
     }
-
-    // 将操作数 A 生成的指令添加到 NOT 节点的指令列表中
-    node->blockInsts.addInst(operand_A_node->blockInsts);
-
-    node->val = nullptr; // 结果通过控制流体现
     return true;
 }
+
+
 
 /// @brief 赋值AST节点翻译成线性中间IR
 /// @param node AST节点
@@ -1589,6 +1640,122 @@ bool IRGenerator::ir_if(ast_node * node)
     node->val = nullptr;
 
     return true;
+}
+
+/// @brief while节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_while(ast_node * node)
+{
+	Function * currentFunc = module->getCurrentFunction();
+	if (!currentFunc) {
+		minic_log(LOG_ERROR, "IRGenerator::ir_while called outside of a function context.");
+		return false;
+	}
+
+	// AST结构: node->sons[0]=condition, node->sons[1]=block
+	if (node->sons.size() != 2) {
+		minic_log(LOG_ERROR,
+				  "Invalid while statement AST node: missing condition or block at line %lld.",
+				  (long long) (node ? node->line_no : -1));
+		return false;
+	}
+
+	ast_node * cond_node = node->sons[0];
+	ast_node * block_node = node->sons[1];
+
+	// 1. 创建需要的标签
+	LabelInstruction * loop_start_label = new LabelInstruction(currentFunc); // 循环入口
+	LabelInstruction * loop_body_label = new LabelInstruction(currentFunc);  // 循环体入口
+	LabelInstruction * loop_end_label = new LabelInstruction(currentFunc);   // 循环出口
+
+	// 2. 添加循环开始标签
+	node->blockInsts.addInst(loop_start_label);
+    m_current_loop_start_label = loop_start_label; // 记录当前循环的开始标签
+	m_current_loop_end_label = loop_end_label;     // 记录当前循环的结束标签
+
+        // 3. 翻译条件表达式 (cond_node)，并传递真/假出口标签
+        if (!ir_visit_for_condition(cond_node, loop_body_label, loop_end_label))
+    {
+        minic_log(LOG_ERROR, "Failed to generate IR for while-condition at line %lld.", (long long) cond_node->line_no);
+		delete loop_start_label;
+		delete loop_body_label;
+		delete loop_end_label;
+		return false;
+    }
+    // 将条件表达式生成的所有指令添加到 while 语句节点的指令列表中。
+	node->blockInsts.addInst(cond_node->blockInsts);
+
+	// 4. 添加循环体标签，并翻译循环体块
+	node->blockInsts.addInst(loop_body_label);
+	ast_node * processed_block_node = ir_visit_ast_node(block_node);
+	if (!processed_block_node) {
+		minic_log(LOG_ERROR, "Failed to generate IR for while-block at line %lld.", (long long) block_node->line_no);
+		delete loop_start_label;
+		delete loop_body_label;
+		delete loop_end_label;
+		return false;
+	}
+    node->blockInsts.addInst(processed_block_node->blockInsts);
+    // 5. 添加跳转到循环开始标签的指令
+    node->blockInsts.addInst(new GotoInstruction(currentFunc, loop_start_label));
+    // 6. 添加循环结束标签
+    node->blockInsts.addInst(loop_end_label);
+    // 7. while 语句本身不产生值
+    node->val = nullptr;
+	return true;
+}
+
+/// @brief break节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_break(ast_node * node)
+{
+	Function * currentFunc = module->getCurrentFunction();
+	if (!currentFunc) {
+		minic_log(LOG_ERROR, "IRGenerator::ir_break called outside of a function context.");
+		return false;
+	}
+
+	// 1. 检查当前是否在循环中
+	if (!m_current_loop_end_label) {
+		minic_log(LOG_ERROR, "IRGenerator::ir_break called outside of a loop context.");
+		return false;
+	}
+
+	// 2. 添加跳转到循环结束标签的指令
+	node->blockInsts.addInst(new GotoInstruction(currentFunc, m_current_loop_end_label));
+
+	// 3. break 语句本身不产生值
+	node->val = nullptr;
+
+	return true;
+}
+
+/// @brief continue节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_continue(ast_node * node)
+{
+	Function * currentFunc = module->getCurrentFunction();
+	if (!currentFunc) {
+		minic_log(LOG_ERROR, "IRGenerator::ir_continue called outside of a function context.");
+		return false;
+	}
+
+	// 1. 检查当前是否在循环中
+	if (!m_current_loop_start_label) {
+		minic_log(LOG_ERROR, "IRGenerator::ir_continue called outside of a loop context.");
+		return false;
+	}
+
+	// 2. 添加跳转到循环开始标签的指令
+	node->blockInsts.addInst(new GotoInstruction(currentFunc, m_current_loop_start_label));
+
+	// 3. continue 语句本身不产生值
+	node->val = nullptr;
+
+	return true;
 }
 
 /// @brief 类型叶子节点翻译成线性中间IR
