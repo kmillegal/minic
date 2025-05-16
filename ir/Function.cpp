@@ -56,6 +56,10 @@ std::vector<FormalParam *> & Function::getParams()
     return params;
 }
 
+void Function::setFormalParams(const std::vector<FormalParam *> & new_params)
+{
+    params = new_params;
+}
 /// @brief 获取函数内的IR指令代码
 /// @return IR指令代码
 InterCode & Function::getInterCode()

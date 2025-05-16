@@ -53,6 +53,11 @@ protected:
     /// @return 翻译是否成功，true：成功，false：失败
     bool ir_function_formal_params(ast_node * node);
 
+    /// @brief 形参AST节点翻译成线性中间IR
+    /// @param node AST节点
+    /// @return 翻译是否成功，true：成功，false：失败
+    bool ir_function_formal_param(ast_node * node);
+
     /// @brief 函数调用AST节点翻译成线性中间IR
     /// @param node AST节点
     /// @return 翻译是否成功，true：成功，false：失败
@@ -215,6 +220,9 @@ private:
 
     LabelInstruction * m_current_true_target;
     LabelInstruction * m_current_false_target;
+
+    std::vector<FormalParam *> m_collected_formal_params; //  用于收集当前函数的形参
+    int current_formal_param_index_; // 用于跟踪当前函数定义的形式参数索引
 
     // 核心递归访问函数
     ast_node * ir_visit_ast_node_recursive(ast_node * node);

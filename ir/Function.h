@@ -51,6 +51,9 @@ public:
     /// @return 形参列表
     std::vector<FormalParam *> & getParams();
 
+
+    void setFormalParams(const std::vector<FormalParam *> & new_params);
+
     /// @brief 获取函数内的IR指令代码
     /// @return IR指令代码
     InterCode & getInterCode();
@@ -180,6 +183,7 @@ private:
     /// @brief 形式参数列表
     ///
     std::vector<FormalParam *> params;
+
 
     ///
     /// @brief 是否是内置函数或者外部库函数

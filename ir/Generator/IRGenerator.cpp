@@ -25,6 +25,7 @@
 #include "Function.h"
 #include "IRCode.h"
 #include "IRGenerator.h"
+#include "MemVariable.h"
 #include "Module.h"
 #include "EntryInstruction.h"
 #include "LabelInstruction.h"
@@ -74,6 +75,7 @@ IRGenerator::IRGenerator(ast_node * _root, Module * _module) : root(_root), modu
     /* 函数定义 */
     ast2ir_handlers[ast_operator_type::AST_OP_FUNC_DEF] = &IRGenerator::ir_function_define;
     ast2ir_handlers[ast_operator_type::AST_OP_FUNC_FORMAL_PARAMS] = &IRGenerator::ir_function_formal_params;
+	ast2ir_handlers[ast_operator_type::AST_OP_FUNC_FORMAL_PARAM] = &IRGenerator::ir_function_formal_param;
 
     /* 变量定义语句 */
     ast2ir_handlers[ast_operator_type::AST_OP_DECL_STMT] = &IRGenerator::ir_declare_statment;
@@ -310,6 +312,11 @@ bool IRGenerator::ir_function_define(ast_node * node)
     // 函数出口指令保存到函数信息中，因为在语义分析函数体时return语句需要跳转到函数尾部，需要这个label指令
     newFunc->setExitLabel(exitLabelInst);
 
+
+    m_collected_formal_params.clear(); // 清空为当前函数收集的形参列表
+    this->current_formal_param_index_ = 0;
+
+
     // 遍历形参，没有IR指令，不需要追加
     result = ir_function_formal_params(param_node);
     if (!result) {
@@ -318,6 +325,8 @@ bool IRGenerator::ir_function_define(ast_node * node)
         return false;
     }
     node->blockInsts.addInst(param_node->blockInsts);
+
+    newFunc->setFormalParams(m_collected_formal_params);
 
     // 新建一个Value，用于保存函数的返回值，如果没有返回值可不用申请
     LocalVariable * retValue = nullptr;
@@ -364,19 +373,124 @@ bool IRGenerator::ir_function_define(ast_node * node)
     return true;
 }
 
-/// @brief 形式参数AST节点翻译成线性中间IR
+/// @brief 形式列表AST节点翻译成线性中间IR
 /// @param node AST节点
 /// @return 翻译是否成功，true：成功，false：失败
 bool IRGenerator::ir_function_formal_params(ast_node * node)
 {
-    // TODO 目前形参还不支持，直接返回true
+    bool result = true;
+    // 形参列表的AST节点包含多个形参节点
+    for (auto son: node->sons) {
+		// 遍历形参节点
+		result = ir_function_formal_param(son);
+		if (!result) {
+			// TODO 自行追加语义错误处理
+			break;
+		}
+	}
 
-    // 每个形参变量都创建对应的临时变量，用于表达实参转递的值
-    // 而真实的形参则创建函数内的局部变量。
-    // 然后产生赋值指令，用于把表达实参值的临时变量拷贝到形参局部变量上。
+    return result;
+}
+
+/// @brief 形式参数AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_function_formal_param(ast_node * node)
+
+    // 每个形参变量都创建对应的临时变量 (param_temp_var)，用于表达实参转递的值
+    // 而真实的形参则创建函数内的局部变量 (param_var)。
+    // 然后产生赋值指令，用于把表达实参值的临时变量拷贝到形参局部变量上 (param_var = param_temp_var)。
     // 请注意这些指令要放在Entry指令后面，因此处理的先后上要注意。
 
-    return true;
+{
+	// 0. 前置检查和获取当前函数
+	Function * current_function = module->getCurrentFunction();
+	if (!current_function) {
+		minic_log(LOG_ERROR,
+					"ir_function_formal_param: Cannot generate IR for formal parameter outside of a function context "
+					"at line %lld.",
+					(long long) (node ? node->line_no : -1));
+		return false;
+	}
+
+	if (!node || node->sons.size() < 2) {
+		minic_log(LOG_ERROR,
+					"ir_function_formal_param: AST node for formal parameter is malformed (expected 2 children) at "
+					"line %lld.",
+					(long long) (node ? node->line_no : -1));
+		return false;
+	}
+
+	ast_node * type_ast_node = node->sons[0]; // 类型节点
+	ast_node * id_ast_node = node->sons[1];   // 变量名节点
+
+	// 提取参数名用于日志和创建对象
+	std::string param_name;
+	if (id_ast_node && id_ast_node->node_type == ast_operator_type::AST_OP_LEAF_VAR_ID &&
+		!id_ast_node->name.empty()) {
+		param_name = id_ast_node->name;
+	} else {
+		minic_log(LOG_ERROR,
+					"ir_function_formal_param: Invalid identifier node for parameter at line %lld.",
+					(long long) (id_ast_node ? id_ast_node->line_no : (node ? node->line_no : -1)));
+		return false;
+	}
+
+	// 提取参数类型
+	Type * param_type;
+	if (type_ast_node && type_ast_node->node_type == ast_operator_type::AST_OP_LEAF_TYPE && type_ast_node->type) {
+		param_type = type_ast_node->type;
+	} else {
+		minic_log(LOG_ERROR,
+					"ir_function_formal_param: Invalid type node for parameter '%s' at line %lld.",
+					param_name.c_str(),
+					(long long) (type_ast_node ? type_ast_node->line_no : (node ? node->line_no : -1)));
+		return false;
+	}
+
+	// 1. 创建 FormalParam 对象。这个对象代表了参数传递的"槽位"或接口。
+	FormalParam * formal_param_value = new FormalParam(param_type, param_name);
+
+    // 2. 将创建的 FormalParam 对象添加到 IRGenerator 的临时收集中
+    m_collected_formal_params.push_back(formal_param_value);
+
+    // 3. 将这个 FormalParam 对象 (formal_param_value) 与形式参数的AST节点 (node) 关联。
+	//    这样，如果上层结构（如函数调用处生成实参传递）需要引用这个参数槽，可以通过 node->val 访问。
+	node->val = formal_param_value;
+
+	// 4. 为函数体内部使用创建一个局部变量 (param_local_var)。
+
+	LocalVariable * param_local_var = static_cast<LocalVariable *>(module->newVarValue(param_type, param_name));
+	if (!param_local_var) {
+		minic_log(
+			LOG_ERROR,
+			"ir_function_formal_param: Failed to create local variable copy for parameter '%s' in function '%s'.",
+			param_name.c_str(),
+			current_function->getName().c_str());
+		delete formal_param_value; // 清理已分配的
+		return false;
+	}
+	// 将此函数内部的局部变量与参数的标识符AST节点(id_ast_node)关联。
+	id_ast_node->val = param_local_var;
+
+	// 5. 创建一个赋值指令 (MoveInstruction)，用于将实际参数的值（存储在 formal_param_value 代表的槽中）
+	//    拷贝到函数体内部使用的局部变量 (param_local_var) 上。
+	MoveInstruction * moveInst = new MoveInstruction(current_function, param_local_var, formal_param_value);
+	if (!moveInst) { // 几乎不可能
+		minic_log(LOG_ERROR,
+					"ir_function_formal_param: Failed to allocate MoveInstruction for parameter '%s'.",
+					param_name.c_str());
+		delete formal_param_value;
+		// param_local_var 可能是由 module 管理的，或者也需要 delete
+		return false;
+	}
+
+	// 6. 将此 MoveInstruction 添加到当前函数的IR代码列表中。
+	//    这应该在函数入口指令 (EntryInstruction) 之后，实际函数体代码之前。
+	current_function->getInterCode().addInst(moveInst);
+
+
+	return true;
 }
 
 /// @brief 函数调用AST节点翻译成线性中间IR
@@ -436,11 +550,11 @@ bool IRGenerator::ir_function_call(ast_node * node)
     }
 
     // TODO 这里请追加函数调用的语义错误检查，这里只进行了函数参数的个数检查等，其它请自行追加。
-    if (realParams.size() != calledFunction->getParams().size()) {
-        // 函数参数的个数不一致，语义错误
-        minic_log(LOG_ERROR, "第%lld行的被调用函数(%s)未定义或声明", (long long) lineno, funcName.c_str());
-        return false;
-    }
+     if (realParams.size() != calledFunction->getParams().size()) {
+         // 函数参数的个数不一致，语义错误
+         minic_log(LOG_ERROR, "第%lld行的被调用函数(%s)未定义或声明", (long long) lineno, funcName.c_str());
+         return false;
+     }
 
     // 返回调用有返回值，则需要分配临时变量，用于保存函数调用的返回值
     Type * type = calledFunction->getReturnType();
@@ -1085,10 +1199,7 @@ bool IRGenerator::ir_and(ast_node * node) {
     // 逻辑与必须在条件上下文中使用，即其父节点（如if）必须已通过 ir_visit_for_condition 设置了真假出口
     if (!m_current_true_target || !m_current_false_target) {
         minic_log(LOG_ERROR, "ir_and: Not called in a conditional context (true/false targets missing from m_current_... members) for node at line %lld.", (long long)(node ? node->line_no : -1));
-        // 在一个更完整的编译器中，如果 AND 的结果需要被赋值 (e.g., bool x = a && b;)，
-        // 则这里需要不同的逻辑：分别计算A和B的布尔值，然后用一个逻辑与指令（如果IR有的话）
-        // 或者通过一系列的比较和分支来得到最终的0/1。
-        // 为了符合当前“传递真假出口”的设计，我们强制它必须在条件上下文。
+
         return false;
     }
     if (!node || node->sons.size() != 2) {
