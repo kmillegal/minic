@@ -75,6 +75,8 @@ protected:
     /// @brief 辅助函数，将 IR 的比较操作符转换为 ARM 条件码
     std::string get_arm_condition_code(IRInstOperator ir_op);
 
+    std::string get_opposite_arm_condition_code(IRInstOperator ir_op, InstSelectorArm32 * selector);
+
     /// @brief 比较指令翻译成ARM32汇编
     /// @param inst IR指令
     void translate_cmp_int32(Instruction * inst);

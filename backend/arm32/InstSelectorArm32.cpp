@@ -161,21 +161,64 @@ void InstSelectorArm32::translate_goto(Instruction * inst)
 /// @param inst IR指令
 void InstSelectorArm32::translate_branch(Instruction * inst)
 {
-	Instanceof(branchInst, BranchInstruction *, inst);
-
-    // 条件跳转
-    // 获取分支条件 Value
-    Value * condition_value = branchInst->getCondition();
-
-    Instruction * comparison_inst = dynamic_cast<Instruction *>(condition_value);
-    IRInstOperator condition_op = comparison_inst->getOp();
+    Instanceof(branchInst, BranchInstruction *, inst);
 
     LabelInstruction * true_target = branchInst->getTrueTarget();
-	LabelInstruction * false_target = branchInst->getFalseTarget();
+    LabelInstruction * false_target = branchInst->getFalseTarget();
+    Value * condition_value = branchInst->getCondition(); // e.g., %t5 in your IR
 
-	std::string cond = get_arm_condition_code(condition_op);
-	iloc.inst("b" + cond, true_target->getName());
-	iloc.inst("b", false_target->getName());
+    Instruction * source_inst = dynamic_cast<Instruction *>(condition_value);
+    std::string cond_code_for_branch;
+    // 条件跳转
+    // 获取分支条件 Value
+	// 1. 如果条件值是一个比较指令，则直接使用其操作码
+    if (source_inst && (source_inst->getOp() == IRInstOperator::IRINST_OP_EQ_I ||
+                        source_inst->getOp() == IRInstOperator::IRINST_OP_NE_I ||
+                        source_inst->getOp() == IRInstOperator::IRINST_OP_LT_I ||
+                        source_inst->getOp() == IRInstOperator::IRINST_OP_LE_I ||
+                        source_inst->getOp() == IRInstOperator::IRINST_OP_GT_I ||
+                        source_inst->getOp() == IRInstOperator::IRINST_OP_GE_I)) {
+        // 条件值直接来自一个比较指令，我们可以直接使用其操作码
+        cond_code_for_branch = get_arm_condition_code(source_inst->getOp());
+    } else {
+        // 条件值不是直接的比较结果
+        // 我们需要将其与0比较，看它是否非零
+        // 1. 加载 condition_value 到一个寄存器
+        int32_t cond_val_reg_no = -1;
+        std::string cond_val_reg_str;
+
+        if (condition_value->getRegId() == -1) {
+            cond_val_reg_no = simpleRegisterAllocator.Allocate(condition_value);
+            if (cond_val_reg_no == -1) {
+                minic_log(LOG_ERROR,
+                          "Branch: Failed to allocate register for condition value %s",
+                          condition_value->getName().c_str());
+                iloc.inst("b", false_target->getName()); // Fallback or error
+                return;
+            }
+            iloc.load_var(cond_val_reg_no, condition_value);
+            cond_val_reg_str = PlatformArm32::regName[cond_val_reg_no];
+        } else {
+            cond_val_reg_no = condition_value->getRegId();
+            cond_val_reg_str = PlatformArm32::regName[cond_val_reg_no];
+        }
+
+        // 2. 与0比较
+        iloc.inst("cmp", cond_val_reg_str, "#0");
+
+        // 3. 如果 condition_value 是临时加载的，释放其寄存器
+        if (condition_value->getRegId() == -1 && cond_val_reg_no != -1) {
+            simpleRegisterAllocator.free(condition_value);
+        }
+
+        // 4. 分支条件现在是 "Not Equal"
+        cond_code_for_branch = "ne";
+    }
+
+    iloc.inst("b" + cond_code_for_branch, true_target->getName());
+    if (false_target) { // 确保 false_target 存在
+        iloc.inst("b", false_target->getName());
+    }
 }
 
 /// @brief 函数入口指令翻译成ARM32汇编
@@ -330,28 +373,52 @@ std::string InstSelectorArm32::get_arm_condition_code(IRInstOperator ir_op)
             return "al"; // Always - fallback, should not happen
     }
 }
-
-
-/// @brief 整数比较指令翻译成ARM32汇编
-/// @param inst IR指令
-void InstSelectorArm32::translate_cmp_int32(Instruction * inst)
+std::string InstSelectorArm32::get_opposite_arm_condition_code(IRInstOperator ir_op, InstSelectorArm32 * selector)
 {
+	switch (ir_op) {
+		case IRInstOperator::IRINST_OP_EQ_I:
+			return "ne"; // Not Equal
+		case IRInstOperator::IRINST_OP_NE_I:
+			return "eq"; // Equal
+		case IRInstOperator::IRINST_OP_LT_I:
+			return "ge"; // Greater Than or Equal (signed)
+		case IRInstOperator::IRINST_OP_LE_I:
+			return "gt"; // Greater Than (signed)
+		case IRInstOperator::IRINST_OP_GT_I:
+			return "le"; // Less Than or Equal (signed)
+		case IRInstOperator::IRINST_OP_GE_I:
+			return "lt"; // Less Than (signed)
+
+		default:
+			minic_log(LOG_ERROR, "Unsupported IR compare operator: %d", static_cast<int>(ir_op));
+			return "al"; // Always - fallback, should not happen
+	}
+}
+
+    /// @brief 整数比较指令翻译成ARM32汇编
+    /// @param inst IR指令
+    void InstSelectorArm32::translate_cmp_int32(Instruction * inst)
+{
+
     if (inst->getOperandsNum() < 2) {
-        minic_log(LOG_ERROR, "CMP instruction expects at least 2 operands.");
+        minic_log(LOG_ERROR,
+                  "CMP IR instruction expects 2 operands. Found %d for inst %s",
+                  inst->getOperandsNum(),
+                  inst->getName().c_str());
         return;
     }
 
     Value * lhs = inst->getOperand(0);
     Value * rhs_value = inst->getOperand(1);
+    IRInstOperator compare_op = inst->getOp(); // 获取比较操作类型
 
+    // 1. 执行比较 (CMP 指令)
     int32_t lhs_reg_no = -1;
     std::string lhs_reg_str;
 
-    // 将左操作数加载到寄存器
     if (lhs->getRegId() == -1) {
         lhs_reg_no = simpleRegisterAllocator.Allocate(lhs);
         if (lhs_reg_no == -1) {
-            minic_log(LOG_ERROR, "Failed to allocate register for LHS of CMP. Value: %s", lhs->getName().c_str());
             return;
         }
         iloc.load_var(lhs_reg_no, lhs);
@@ -361,34 +428,26 @@ void InstSelectorArm32::translate_cmp_int32(Instruction * inst)
         lhs_reg_str = PlatformArm32::regName[lhs_reg_no];
     }
 
-    // 尝试将 rhs_value 转换为 ConstInt*
     ConstInt * rhs_ci = dynamic_cast<ConstInt *>(rhs_value);
-
-    if (rhs_ci) {                             // 如果右手边确实是一个 ConstInt
-        int32_t const_val = rhs_ci->getVal(); // 使用 getVal() 获取整数值
-
-        if (PlatformArm32::constExpr(const_val)) { // 使用平台函数判断是否是合法立即数
+    if (rhs_ci) {
+        int32_t const_val = rhs_ci->getVal();
+        if (PlatformArm32::constExpr(const_val)) {
             iloc.inst("cmp", lhs_reg_str, "#" + std::to_string(const_val));
         } else {
-            // 常量值太大或形式不适合，不能作立即数，需要加载到寄存器
-            goto load_rhs_to_reg_for_cmp;
+            goto load_rhs_to_reg_for_cmp_materialize;
         }
     } else {
-        // rhs_value 不是 ConstInt 类型 (可能是其他类型的 Constant，或非 Constant Value)
-    load_rhs_to_reg_for_cmp:
+    load_rhs_to_reg_for_cmp_materialize:
         int32_t rhs_reg_no = -1;
         std::string rhs_reg_str;
         if (rhs_value->getRegId() == -1) {
             rhs_reg_no = simpleRegisterAllocator.Allocate(rhs_value);
-            if (rhs_reg_no == -1) {
-                minic_log(LOG_ERROR,
-                          "Failed to allocate register for RHS of CMP. Value: %s",
-                          rhs_value->getName().c_str());
+            if (rhs_reg_no == -1) { /* ... error handling ... */
                 if (lhs->getRegId() == -1 && lhs_reg_no != -1)
                     simpleRegisterAllocator.free(lhs);
                 return;
             }
-            iloc.load_var(rhs_reg_no, rhs_value); // iloc.load_var 需要能处理加载常量
+            iloc.load_var(rhs_reg_no, rhs_value);
             rhs_reg_str = PlatformArm32::regName[rhs_reg_no];
         } else {
             rhs_reg_no = rhs_value->getRegId();
@@ -400,10 +459,54 @@ void InstSelectorArm32::translate_cmp_int32(Instruction * inst)
         }
     }
 
-    // 释放为 lhs 临时分配的寄存器
+    // 临时加载的 lhs 可以释放了
     if (lhs->getRegId() == -1 && lhs_reg_no != -1) {
         simpleRegisterAllocator.free(lhs);
     }
+
+    // 2. 物化比较结果 (0 或 1) 到 inst (结果 Value) 对应的寄存器
+    int32_t result_target_reg_no;
+    bool result_reg_is_temporary = false;
+
+    if (inst->getRegId() == -1) {
+        // 结果 Value 没有预分配寄存器 (通常意味着它是个临时变量，需要存到栈上)
+        result_target_reg_no = simpleRegisterAllocator.Allocate(inst); // 分配一个临时寄存器
+        if (result_target_reg_no == -1) {
+            minic_log(LOG_ERROR, "Failed to allocate register for CMP result Value: %s", inst->getName().c_str());
+            return;
+        }
+        result_reg_is_temporary = true;
+    } else {
+        // 结果 Value 已经分配了寄存器
+        result_target_reg_no = inst->getRegId();
+    }
+
+    std::string result_target_reg_str = PlatformArm32::regName[result_target_reg_no];
+    std::string true_cond_code = get_arm_condition_code(compare_op);
+
+    if (true_cond_code != "al") { // 确保不是无效的比较操作符导致 "al"
+        iloc.inst("mov" + true_cond_code, result_target_reg_str, "#1");
+        // 为了确保寄存器有明确的0或1，需要设置相反条件为0
+        // 或者先统一设置为0，再条件设置为1
+        std::string false_cond_code = get_opposite_arm_condition_code(compare_op, this);
+        if (false_cond_code != "al") {
+            iloc.inst("mov" + false_cond_code, result_target_reg_str, "#0");
+        } else {                                           // 如果无法获取false_cond，则用先设0再条件设1
+            iloc.inst("mov", result_target_reg_str, "#0"); // 先设为0 (false)
+            iloc.inst("mov" + true_cond_code, result_target_reg_str, "#1"); // 条件为真时设为1
+        }
+    } else {
+
+        iloc.inst("mov", result_target_reg_str, "#0"); // Default to 0 on error
+        minic_log(LOG_ERROR, "CMP result materialization with 'al' condition for op: %d", static_cast<int>(compare_op));
+    }
+
+    // 3. 如果结果寄存器是临时的 (即 inst 原本没有 regId)，则将结果存回 inst 的内存位置
+    if (result_reg_is_temporary) {
+        iloc.store_var(result_target_reg_no, inst, ARM32_TMP_REG_NO);
+        simpleRegisterAllocator.free(inst);                           // 释放为 inst 临时分配的寄存器
+    }
+
 }
 
 /// @brief 二元操作指令翻译成ARM32汇编
