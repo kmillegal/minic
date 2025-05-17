@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ $# -ne 2 ]; then
-	echo "arm32-build-gdb.sh workspacefolder arm32filename"
+	echo "riscv64-build-gdb.sh workspacefolder arm32filename"
 	exit 1
 fi
 
