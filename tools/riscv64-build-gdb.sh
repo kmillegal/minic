@@ -5,7 +5,7 @@ if [ $# -ne 2 ]; then
 	exit 1
 fi
 
-# 生成ARM32汇编语言
+# 交叉编译程序成RISCV64程序
 "$1/build/minic" -S -A -o "$1/tests/$2.s" "$1/tests/$2.c"
 
 # 交叉编译程序成ARM32程序

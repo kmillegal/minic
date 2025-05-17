@@ -5,8 +5,9 @@ if [ $# -ne 2 ]; then
 	exit 1
 fi
 
-# 交叉编译程序成ARM32程序
-riscv64-linux-gnu-gcc -g -static --include "$1/tests/std.h" -o "$1/tests/$2" "tests/$2.c" "$1/tests/std.c"
+# 交叉编译程序成RISCV64程序
+riscv64-linux-gnu-gcc -march=rv64gc -S --include "$1/tests/std.h" -o "$1/tests/$2.s" "$1/tests/$2.c"
+riscv64-linux-gnu-gcc -march=rv64gc -g -static -o "$1/tests/$2" "$1/tests/$2.s" "$1/tests/std.c"
 
 echo "Now run gdb in another window"
 echo "Now gdb start"

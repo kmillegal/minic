@@ -34,7 +34,7 @@
 			"type": "shell",
 			"label": "minic and qemu run arm32",
 			"command": "${workspaceFolder}/tools/arm32-build-gdb.sh",
-			"args": ["${workspaceFolder}", "test2-2"],
+			"args": ["${workspaceFolder}", "test1-1"],
 			"isBackground": true,
 			"problemMatcher": [
 				{
@@ -59,7 +59,7 @@
 			"type": "shell",
 			"label": "minic and qemu run arm64",
 			"command": "${workspaceFolder}/tools/arm64-build-gdb.sh",
-			"args": ["${workspaceFolder}", "test2-2"],
+			"args": ["${workspaceFolder}", "test1-1"],
 			"isBackground": true,
 			"problemMatcher": [
 				{
@@ -84,7 +84,7 @@
 			"type": "shell",
 			"label": "minic and qemu run riscv64",
 			"command": "${workspaceFolder}/tools/riscv64-build-gdb.sh",
-			"args": ["${workspaceFolder}", "test2-2"],
+			"args": ["${workspaceFolder}", "test1-1"],
 			"isBackground": true,
 			"problemMatcher": [
 				{
@@ -109,7 +109,7 @@
 			"type": "shell",
 			"label": "direct and qemu run arm32",
 			"command": "${workspaceFolder}/tools/arm32-direct-gdb.sh",
-			"args": ["${workspaceFolder}", "test2-2"],
+			"args": ["${workspaceFolder}", "test1-1"],
 			"isBackground": true,
 			"problemMatcher": [
 				{
@@ -133,7 +133,7 @@
 			"type": "shell",
 			"label": "direct and qemu run arm64",
 			"command": "${workspaceFolder}/tools/arm64-direct-gdb.sh",
-			"args": ["${workspaceFolder}", "test2-2"],
+			"args": ["${workspaceFolder}", "test1-1"],
 			"isBackground": true,
 			"problemMatcher": [
 				{
@@ -157,7 +157,7 @@
 			"type": "shell",
 			"label": "direct and qemu run riscv64",
 			"command": "${workspaceFolder}/tools/riscv64-direct-gdb.sh",
-			"args": ["${workspaceFolder}", "test2-2"],
+			"args": ["${workspaceFolder}", "test1-1"],
 			"isBackground": true,
 			"problemMatcher": [
 				{
