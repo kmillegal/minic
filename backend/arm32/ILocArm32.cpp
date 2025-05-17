@@ -1,5 +1,5 @@
 ﻿///
-/// @file ILocArm32.cpp
+/// @fi e ILocArm32.cpp
 /// @brief 指令序列管理的实现，ILOC的全称为Intermediate Language for Optimizing Compilers
 /// @author zenglj (zenglj@live.com)
 /// @version 1.0

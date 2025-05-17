@@ -68,6 +68,17 @@ protected:
     /// @param inst IR指令
     void translate_goto(Instruction * inst);
 
+    /// @brief branch指令翻译成ARM32汇编
+    /// @param inst IR指令
+    void translate_branch(Instruction * inst);
+
+    /// @brief 辅助函数，将 IR 的比较操作符转换为 ARM 条件码
+    std::string get_arm_condition_code(IRInstOperator ir_op);
+
+    /// @brief 比较指令翻译成ARM32汇编
+    /// @param inst IR指令
+    void translate_cmp_int32(Instruction * inst);
+
     /// @brief 整数加法指令翻译成ARM32汇编
     /// @param inst IR指令
     void translate_add_int32(Instruction * inst);
@@ -91,6 +102,8 @@ protected:
     /// @brief 整数求负指令翻译成ARM32汇编
     /// @param inst IR指令
     void translate_neg_int32(Instruction * inst);
+
+
 
     /// @brief 二元操作指令翻译成ARM32汇编
     /// @param inst IR指令

@@ -72,6 +72,8 @@ enum class IRInstOperator : std::int8_t {
     IRINST_OP_GT_I,
     /// @brief 条件分支指令
     IRINST_OP_BRANCH,
+    /// @brief 比较指令
+    IRINST_OP_CMP_I,
 
     /// @brief 最大指令码，也是无效指令
     IRINST_OP_MAX

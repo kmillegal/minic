@@ -18,6 +18,7 @@
 #include "Common.h"
 #include "ILocArm32.h"
 #include "InstSelectorArm32.h"
+#include "Instruction.h"
 #include "PlatformArm32.h"
 
 #include "PointerType.h"
@@ -28,6 +29,7 @@
 #include "GotoInstruction.h"
 #include "FuncCallInstruction.h"
 #include "MoveInstruction.h"
+#include "BranchInstruction.h"
 
 /// @brief 构造函数
 /// @param _irCode 指令
@@ -44,6 +46,7 @@ InstSelectorArm32::InstSelectorArm32(vector<Instruction *> & _irCode,
 
     translator_handlers[IRInstOperator::IRINST_OP_LABEL] = &InstSelectorArm32::translate_label;
     translator_handlers[IRInstOperator::IRINST_OP_GOTO] = &InstSelectorArm32::translate_goto;
+    translator_handlers[IRInstOperator::IRINST_OP_BRANCH] = &InstSelectorArm32::translate_branch;
 
     translator_handlers[IRInstOperator::IRINST_OP_ASSIGN] = &InstSelectorArm32::translate_assign;
 
@@ -53,6 +56,15 @@ InstSelectorArm32::InstSelectorArm32(vector<Instruction *> & _irCode,
     translator_handlers[IRInstOperator::IRINST_OP_DIV_I] = &InstSelectorArm32::translate_div_int32;
     translator_handlers[IRInstOperator::IRINST_OP_MOD_I] = &InstSelectorArm32::translate_mod_int32;
     translator_handlers[IRInstOperator::IRINST_OP_NEG_I] = &InstSelectorArm32::translate_neg_int32;
+    translator_handlers[IRInstOperator::IRINST_OP_CMP_I] = &InstSelectorArm32::translate_cmp_int32;
+    translator_handlers[IRInstOperator::IRINST_OP_EQ_I] = &InstSelectorArm32::translate_cmp_int32;
+    translator_handlers[IRInstOperator::IRINST_OP_NE_I] = &InstSelectorArm32::translate_cmp_int32;
+    translator_handlers[IRInstOperator::IRINST_OP_LT_I] = &InstSelectorArm32::translate_cmp_int32;
+    translator_handlers[IRInstOperator::IRINST_OP_LE_I] = &InstSelectorArm32::translate_cmp_int32;
+    translator_handlers[IRInstOperator::IRINST_OP_GT_I] = &InstSelectorArm32::translate_cmp_int32;
+    translator_handlers[IRInstOperator::IRINST_OP_GE_I] = &InstSelectorArm32::translate_cmp_int32;
+
+
 
     translator_handlers[IRInstOperator::IRINST_OP_FUNC_CALL] = &InstSelectorArm32::translate_call;
     translator_handlers[IRInstOperator::IRINST_OP_ARG] = &InstSelectorArm32::translate_arg;
@@ -143,6 +155,27 @@ void InstSelectorArm32::translate_goto(Instruction * inst)
 
     // 无条件跳转
     iloc.jump(gotoInst->getTarget()->getName());
+}
+
+/// @brief branch指令翻译成ARM32汇编
+/// @param inst IR指令
+void InstSelectorArm32::translate_branch(Instruction * inst)
+{
+	Instanceof(branchInst, BranchInstruction *, inst);
+
+    // 条件跳转
+    // 获取分支条件 Value
+    Value * condition_value = branchInst->getCondition();
+
+    Instruction * comparison_inst = dynamic_cast<Instruction *>(condition_value);
+    IRInstOperator condition_op = comparison_inst->getOp();
+
+    LabelInstruction * true_target = branchInst->getTrueTarget();
+	LabelInstruction * false_target = branchInst->getFalseTarget();
+
+	std::string cond = get_arm_condition_code(condition_op);
+	iloc.inst("b" + cond, true_target->getName());
+	iloc.inst("b", false_target->getName());
 }
 
 /// @brief 函数入口指令翻译成ARM32汇编
@@ -274,6 +307,103 @@ void InstSelectorArm32::translate_neg_int32(Instruction * inst)
 
     simpleRegisterAllocator.free(operand); // 释放操作数使用的寄存器
     simpleRegisterAllocator.free(result);  // 释放结果使用的寄存器
+}
+// 辅助函数，将 IR 的比较操作符转换为 ARM 条件码
+std::string InstSelectorArm32::get_arm_condition_code(IRInstOperator ir_op)
+{
+    switch (ir_op) {
+        case IRInstOperator::IRINST_OP_EQ_I:
+            return "eq"; // Equal
+        case IRInstOperator::IRINST_OP_NE_I:
+            return "ne"; // Not Equal
+        case IRInstOperator::IRINST_OP_LT_I:
+            return "lt"; // Less Than (signed)
+        case IRInstOperator::IRINST_OP_LE_I:
+            return "le"; // Less Than or Equal (signed)
+        case IRInstOperator::IRINST_OP_GT_I:
+            return "gt"; // Greater Than (signed)
+        case IRInstOperator::IRINST_OP_GE_I:
+            return "ge"; // Greater Than or Equal (signed)
+
+        default:
+            minic_log(LOG_ERROR, "Unsupported IR compare operator: %d", static_cast<int>(ir_op));
+            return "al"; // Always - fallback, should not happen
+    }
+}
+
+
+/// @brief 整数比较指令翻译成ARM32汇编
+/// @param inst IR指令
+void InstSelectorArm32::translate_cmp_int32(Instruction * inst)
+{
+    if (inst->getOperandsNum() < 2) {
+        minic_log(LOG_ERROR, "CMP instruction expects at least 2 operands.");
+        return;
+    }
+
+    Value * lhs = inst->getOperand(0);
+    Value * rhs_value = inst->getOperand(1);
+
+    int32_t lhs_reg_no = -1;
+    std::string lhs_reg_str;
+
+    // 将左操作数加载到寄存器
+    if (lhs->getRegId() == -1) {
+        lhs_reg_no = simpleRegisterAllocator.Allocate(lhs);
+        if (lhs_reg_no == -1) {
+            minic_log(LOG_ERROR, "Failed to allocate register for LHS of CMP. Value: %s", lhs->getName().c_str());
+            return;
+        }
+        iloc.load_var(lhs_reg_no, lhs);
+        lhs_reg_str = PlatformArm32::regName[lhs_reg_no];
+    } else {
+        lhs_reg_no = lhs->getRegId();
+        lhs_reg_str = PlatformArm32::regName[lhs_reg_no];
+    }
+
+    // 尝试将 rhs_value 转换为 ConstInt*
+    ConstInt * rhs_ci = dynamic_cast<ConstInt *>(rhs_value);
+
+    if (rhs_ci) {                             // 如果右手边确实是一个 ConstInt
+        int32_t const_val = rhs_ci->getVal(); // 使用 getVal() 获取整数值
+
+        if (PlatformArm32::constExpr(const_val)) { // 使用平台函数判断是否是合法立即数
+            iloc.inst("cmp", lhs_reg_str, "#" + std::to_string(const_val));
+        } else {
+            // 常量值太大或形式不适合，不能作立即数，需要加载到寄存器
+            goto load_rhs_to_reg_for_cmp;
+        }
+    } else {
+        // rhs_value 不是 ConstInt 类型 (可能是其他类型的 Constant，或非 Constant Value)
+    load_rhs_to_reg_for_cmp:
+        int32_t rhs_reg_no = -1;
+        std::string rhs_reg_str;
+        if (rhs_value->getRegId() == -1) {
+            rhs_reg_no = simpleRegisterAllocator.Allocate(rhs_value);
+            if (rhs_reg_no == -1) {
+                minic_log(LOG_ERROR,
+                          "Failed to allocate register for RHS of CMP. Value: %s",
+                          rhs_value->getName().c_str());
+                if (lhs->getRegId() == -1 && lhs_reg_no != -1)
+                    simpleRegisterAllocator.free(lhs);
+                return;
+            }
+            iloc.load_var(rhs_reg_no, rhs_value); // iloc.load_var 需要能处理加载常量
+            rhs_reg_str = PlatformArm32::regName[rhs_reg_no];
+        } else {
+            rhs_reg_no = rhs_value->getRegId();
+            rhs_reg_str = PlatformArm32::regName[rhs_reg_no];
+        }
+        iloc.inst("cmp", lhs_reg_str, rhs_reg_str);
+        if (rhs_value->getRegId() == -1 && rhs_reg_no != -1) {
+            simpleRegisterAllocator.free(rhs_value);
+        }
+    }
+
+    // 释放为 lhs 临时分配的寄存器
+    if (lhs->getRegId() == -1 && lhs_reg_no != -1) {
+        simpleRegisterAllocator.free(lhs);
+    }
 }
 
 /// @brief 二元操作指令翻译成ARM32汇编
