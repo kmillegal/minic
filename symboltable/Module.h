@@ -149,8 +149,8 @@ protected:
     GlobalVariable * newGlobalVariable(Type * type, std::string name);
 
     /// @brief 根据变量名获取当前符号（只管理全局变量）
-    /// \param name 变量名
-    /// \return 变量对应的值
+    /// @param name 变量名
+    /// @return 变量对应的值
     GlobalVariable * findGlobalVariable(std::string name);
 
     /// @brief 直接插入函数到符号表中，不考虑现有的表中是否存在

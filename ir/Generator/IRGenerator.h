@@ -226,6 +226,19 @@ protected:
     /// @brief AST节点运算符与动作函数关联的映射表
     std::unordered_map<ast_operator_type, ast2ir_handler_t> ast2ir_handlers;
 
+    // 核心递归访问函数
+    /// @brief 访问AST节点的核心递归函数
+    /// @param node AST节点
+    /// @return 处理后的节点，可能是 nullptr
+    ast_node * ir_visit_ast_node_recursive(ast_node * node);
+
+    /// @brief 访问AST节点，用于将其作为条件处理，并根据结果跳转。
+    /// @param cond_node AST节点。
+    /// @param true_target 如果 cond_node 求值为真，则跳转到此标签。
+    /// @param false_target 如果 cond_node 求值为假，则跳转到此标签。
+    /// @return 翻译是否成功，true：成功，false：失败
+    bool ir_visit_for_condition(ast_node * cond_node, LabelInstruction * true_target, LabelInstruction * false_target);
+
 private:
     /// @brief 抽象语法树的根
     ast_node * root;
@@ -242,9 +255,5 @@ private:
     std::vector<FormalParam *> m_collected_formal_params; //  用于收集当前函数的形参
     int current_formal_param_index_; // 用于跟踪当前函数定义的形式参数索引
 
-    // 核心递归访问函数
-    ast_node * ir_visit_ast_node_recursive(ast_node * node);
 
-    /// @brief 访问AST节点，用于将其作为条件处理，并根据结果跳转。
-    bool ir_visit_for_condition(ast_node * cond_node, LabelInstruction * true_target, LabelInstruction * false_target);
 };

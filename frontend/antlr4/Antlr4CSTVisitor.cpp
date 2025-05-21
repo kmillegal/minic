@@ -747,14 +747,24 @@ std::any MiniCCSTVisitor::visitVarDecl(MiniCParser::VarDeclContext * ctx)
 
 std::any MiniCCSTVisitor::visitVarDef(MiniCParser::VarDefContext * ctx)
 {
-    // varDef: T_ID;
+    // varDef: T_ID(T_ASSIGN expr)?;
 
     auto varId = ctx->T_ID()->getText();
 
     // 获取行号
     int64_t lineNo = (int64_t) ctx->T_ID()->getSymbol()->getLine();
 
-    return ast_node::New(varId, lineNo);
+    if (ctx->T_ASSIGN()) {
+		// 变量定义有初始值
+		// 识别 varDef: T_ID T_ASSIGN expr
+		auto exprNode = std::any_cast<ast_node *>(visitExpr(ctx->expr()));
+
+		// 创建赋值节点，孩子为ID和Expr
+		return ast_node::New(ast_operator_type::AST_OP_ASSIGN, ast_node::New(varId, lineNo), exprNode, nullptr);
+    } else
+	{
+        return ast_node::New(varId, lineNo);
+	}
 }
 
 std::any MiniCCSTVisitor::visitBasicType(MiniCParser::BasicTypeContext * ctx)

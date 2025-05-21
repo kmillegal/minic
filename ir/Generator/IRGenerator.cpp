@@ -197,11 +197,7 @@ ast_node * IRGenerator::ir_visit_ast_node_recursive(ast_node * node)
         return nullptr;
     }
 
-    // 通用后处理逻辑：
-    // 如果当前节点计算出了一个值 (node->val 非空),
-    // 并且我们处于一个条件上下文中 (m_current_true_target 和 m_current_false_target 非空),
-    // 并且该节点本身不是一个会自己处理控制流的“控制流敏感”操作符，
-    // 那么为这个 node->val 生成一条 BranchInstruction。
+
     if (node->val && m_current_true_target && m_current_false_target) {
         bool is_control_flow_sensitive_op =
             (node->node_type == ast_operator_type::AST_OP_AND || node->node_type == ast_operator_type::AST_OP_OR ||
@@ -1825,10 +1821,18 @@ bool IRGenerator::ir_declare_statment(ast_node * node)
 bool IRGenerator::ir_variable_declare(ast_node * node)
 {
     // 共有两个孩子，第一个类型，第二个变量名
-
+    // 第二个可能为变量名或赋值语句
     // TODO 这里可强化类型等检查
 
-    node->val = module->newVarValue(node->sons[0]->type, node->sons[1]->name);
+    ast_node * right_node = node->sons[1];
+    ast_node * left_node = node->sons[0];
+    if (right_node->node_type == ast_operator_type::AST_OP_ASSIGN) {
+        node->val = module->newVarValue(left_node->type, right_node->sons[0]->name);
+		// 赋值语句
+		ir_assign(right_node);
+    } else {
+        node->val = module->newVarValue(left_node->type, right_node->name);
+    }
 
     return true;
 }

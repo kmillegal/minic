@@ -29,14 +29,15 @@ blockItemList: blockItem+;
 // 每个Item可以是一个语句，或者变量声明语句
 blockItem: statement | varDecl;
 
-// 变量声明，目前不支持变量含有初值
+// 变量声明
 varDecl: basicType varDef (T_COMMA varDef)* T_SEMICOLON;
 
 // 基本类型
 basicType: T_INT;
 
-// 变量定义
-varDef: T_ID;
+// 变量定义,可以是一个赋值语句，或者不赋值
+varDef: T_ID(T_ASSIGN expr)?;
+
 
 // 目前语句支持return和赋值语句
 statement:
