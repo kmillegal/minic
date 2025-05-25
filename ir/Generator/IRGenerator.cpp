@@ -1810,6 +1810,7 @@ bool IRGenerator::ir_declare_statment(ast_node * node)
         if (!result) {
             break;
         }
+        node->blockInsts.addInst(child->blockInsts);
     }
 
     return result;
@@ -1827,9 +1828,33 @@ bool IRGenerator::ir_variable_declare(ast_node * node)
     ast_node * right_node = node->sons[1];
     ast_node * left_node = node->sons[0];
     if (right_node->node_type == ast_operator_type::AST_OP_ASSIGN) {
-        node->val = module->newVarValue(left_node->type, right_node->sons[0]->name);
-		// 赋值语句
-		ir_assign(right_node);
+
+        ast_node * var_name_node = right_node->sons[0];
+        ast_node * init_val_node_ast = right_node->sons[1];
+        std::string var_name;
+        Value * var_ir_value;
+        var_name = var_name_node->name;
+
+        // 1. 创建变量的IR Value
+        var_ir_value = module->newVarValue(left_node->type, var_name);
+        node->val = var_ir_value; // 声明节点自身也记录这个变量的IR Value
+
+        // 2. 翻译初始化表达式
+        ast_node * translated_init_val_node = ir_visit_ast_node(init_val_node_ast);
+        if (!translated_init_val_node) {
+            // 初始化表达式翻译失败
+            return false;
+        }
+
+        // 3. 添加翻译初始化表达式所生成的指令
+        node->blockInsts.addInst(translated_init_val_node->blockInsts);
+
+        // 4. 创建Move指令，将初始化表达式的结果赋给新声明的变量
+        MoveInstruction * movInst = new MoveInstruction(module->getCurrentFunction(),
+                                                        var_ir_value,
+                                                        translated_init_val_node->val
+        );
+        node->blockInsts.addInst(movInst);
     } else {
         node->val = module->newVarValue(left_node->type, right_node->name);
     }

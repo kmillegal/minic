@@ -37,7 +37,7 @@
 			"type": "cppdbg",
 			"request": "launch",
 			"program": "${workspaceFolder}/build/minic",
-			"args": ["-S", "-A", "-I", "-o", "tests/multi_branch.ir", "tests/multi_branch.c"],
+			"args": ["-S", "-A", "-I", "-o", "tests/func.ir", "tests/func.c"],
 			// 程序的入口（main函数的入口）是否停止
 			"stopAtEntry": true,
 			"cwd": "${workspaceFolder}",
