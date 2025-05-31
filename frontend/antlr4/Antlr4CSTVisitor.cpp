@@ -136,10 +136,21 @@ std::any MiniCCSTVisitor::visitFormalParamList(MiniCParser::FormalParamListConte
 /// @param ctx CST上下文
 std::any MiniCCSTVisitor::visitFuncDef(MiniCParser::FuncDefContext * ctx)
 {
-    // 识别的文法产生式：funcDef : T_INT T_ID T_L_PAREN formalParamList? T_R_PAREN block;
+    // 识别的文法产生式：funcDef : (T_INT|T_VOID) T_ID T_L_PAREN formalParamList? T_R_PAREN block;
 
     // 函数返回类型，终结符
-    type_attr funcReturnType{BasicType::TYPE_INT, (int64_t) ctx->T_INT()->getSymbol()->getLine()};
+    type_attr funcReturnType;
+    // 函数返回类型只能是int和void
+    if(ctx->T_VOID()) {
+		// 函数返回类型为void
+		funcReturnType={BasicType::TYPE_VOID, (int64_t) ctx->T_VOID()->getSymbol()->getLine()};
+	} else if(ctx->T_INT()) {
+		// 函数返回类型为int
+		funcReturnType={BasicType::TYPE_INT, (int64_t) ctx->T_INT()->getSymbol()->getLine()};
+	} else {
+		std::cerr << "Error: Unknown function return type." << std::endl;
+		return nullptr; // 或者抛出异常
+	}
 
     // 创建函数名的标识符终结符节点，终结符
     char * id = strdup(ctx->T_ID()->getText().c_str());

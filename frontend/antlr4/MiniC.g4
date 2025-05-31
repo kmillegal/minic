@@ -17,8 +17,8 @@ compileUnit: (funcDef | varDecl)* EOF;
 // 形参列表
 formalParamList: basicType T_ID (T_COMMA basicType T_ID)*;
 
-// 函数定义，支持形参，不支持返回void类型
-funcDef: T_INT T_ID T_L_PAREN formalParamList? T_R_PAREN block;
+// 函数定义，支持形参，支持返回void类型
+funcDef: (T_INT|T_VOID) T_ID T_L_PAREN formalParamList? T_R_PAREN block;
 
 // 语句块看用作函数体，这里允许多个语句，并且不含任何语句
 block: T_L_BRACE blockItemList? T_R_BRACE;
