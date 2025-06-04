@@ -13,11 +13,12 @@ class  MiniCLexer : public antlr4::Lexer {
 public:
   enum {
     T_L_PAREN = 1, T_R_PAREN = 2, T_SEMICOLON = 3, T_L_BRACE = 4, T_R_BRACE = 5, 
-    T_ASSIGN = 6, T_EQ = 7, T_NE = 8, T_LE = 9, T_LT = 10, T_GE = 11, T_GT = 12, 
-    T_AND = 13, T_OR = 14, T_NOT = 15, T_COMMA = 16, T_ADD = 17, T_SUB = 18, 
-    T_MUL = 19, T_DIV = 20, T_MOD = 21, T_RETURN = 22, T_INT = 23, T_VOID = 24, 
-    T_IF = 25, T_ELSE = 26, T_WHILE = 27, T_BREAK = 28, T_CONTINUE = 29, 
-    T_ID = 30, T_DIGIT = 31, SL_COMMENT = 32, ML_COMMENT = 33, WS = 34
+    T_L_BRACKET = 6, T_R_BRACKET = 7, T_ASSIGN = 8, T_EQ = 9, T_NE = 10, 
+    T_LE = 11, T_LT = 12, T_GE = 13, T_GT = 14, T_AND = 15, T_OR = 16, T_NOT = 17, 
+    T_COMMA = 18, T_ADD = 19, T_SUB = 20, T_MUL = 21, T_DIV = 22, T_MOD = 23, 
+    T_RETURN = 24, T_INT = 25, T_VOID = 26, T_IF = 27, T_ELSE = 28, T_WHILE = 29, 
+    T_BREAK = 30, T_CONTINUE = 31, T_ID = 32, T_DIGIT = 33, SL_COMMENT = 34, 
+    ML_COMMENT = 35, WS = 36
   };
 
   explicit MiniCLexer(antlr4::CharStream *input);

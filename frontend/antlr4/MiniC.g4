@@ -106,6 +106,8 @@ T_R_PAREN: ')';
 T_SEMICOLON: ';';
 T_L_BRACE: '{';
 T_R_BRACE: '}';
+T_L_BRACKET: '[';
+T_R_BRACKET: ']';
 
 T_ASSIGN: '=';
 T_EQ: '==';
