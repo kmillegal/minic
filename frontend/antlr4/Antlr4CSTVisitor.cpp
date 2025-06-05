@@ -74,62 +74,44 @@ std::any MiniCCSTVisitor::visitCompileUnit(MiniCParser::CompileUnitContext * ctx
     return compileUnitNode;
 }
 
+/// @brief 非终结运算符formalParam的遍历
+/// @param ctx CST上下文
+std::any MiniCCSTVisitor::visitFormalParam(MiniCParser::FormalParamContext * ctx)
+{
+    // 识别的文法产生式：formalParam : basicType T_ID arrayParamDimensions?;
+    ast_node * formal_param_node;
+    // 创建代表单个形参的 AST 节点 (AST_OP_FUNC_FORMAL_PARAM)
+    type_attr typeAttr = std::any_cast<type_attr>(visitBasicType(ctx->basicType()));
+    // 获取所有 T_ID 终端节点 (用于名称和行号)
+    auto idNode = ctx->T_ID()->getText();
+    int64_t lineNo = (int64_t) ctx->T_ID()->getSymbol()->getLine();
+    formal_param_node = create_func_formal_param(typeAttr, lineNo, idNode.c_str());
+    if( ctx->arrayParamDimensions() ) {
+        auto arrayParamDimensionsNode = std::any_cast<ast_node *>(visitArrayParamDimensions(ctx->arrayParamDimensions()));
+        return ast_node::New(ast_operator_type::AST_OP_ARRAY,
+                             ast_node::New(idNode, lineNo),
+                             arrayParamDimensionsNode,
+                             nullptr);
+    }
+    return formal_param_node; // 返回单个形参节点
+}
+
 ///  @brief 非终结运算符formalParamList的遍历
 /// @param ctx CST上下文
 std::any MiniCCSTVisitor::visitFormalParamList(MiniCParser::FormalParamListContext * ctx)
 {
-    // 识别的文法产生式：formalParamList : basicType T_ID (T_COMMA basicType T_ID)*;
+    // 识别的文法产生式：formalParamList : formalParam (T_COMMA formalParam)*;
     // 创建代表整个形参列表的 AST 节点 (AST_OP_FUNC_FORMAL_PARAMS)
     ast_node * formal_params_list_node = create_contain_node(ast_operator_type::AST_OP_FUNC_FORMAL_PARAMS);
-    if (!formal_params_list_node) {
-        std::cerr << "Error: Failed to create AST_OP_FUNC_FORMAL_PARAMS node." << std::endl;
-        // 根据你的错误处理策略，可能返回一个空的 std::any 或抛出异常
-        return std::any{}; // 或者 return nullptr; 如果你的 std::any 可以存 nullptr
-    }
 
-    // 获取所有 basicType 上下文对象 (用于行号和可能的未来类型扩展)
-    
-    auto typeContexts = ctx->basicType();
-    // 获取所有 T_ID 终端节点 (用于名称和行号)
-    auto idNodes = ctx->T_ID();
+    // 遍历每个 formalParam
+    for (auto formalParamCtx: ctx->formalParam()) {
+		// 递归调用 visitFormalParam 获取每个形参的 AST 节点
+		auto formal_param_node = std::any_cast<ast_node *>(visitFormalParam(formalParamCtx));
+		// 将每个形参节点插入到 formal_params_list_node 中
+		(void) formal_params_list_node->insert_son_node(formal_param_node);
+	}
 
-    // 2. 遍历每一对 (basicType, T_ID) 来处理每个形参
-    for (size_t i = 0; i < idNodes.size(); ++i) {
-        MiniCParser::BasicTypeContext * currentTypeCtx = typeContexts[i];
-        antlr4::tree::TerminalNode * currentIdNode = idNodes[i];
-
-        //  获取参数类型
-        type_attr param_type_attribute;
-        std::any type_attr_any = visitBasicType(currentTypeCtx);
-        if (type_attr_any.has_value() && type_attr_any.type() == typeid(type_attr)) {
-            param_type_attribute = std::any_cast<type_attr>(type_attr_any);
-        } else {
-            std::cerr << "Error: visitBasicType did not return a valid type_attr for parameter '"
-                      << currentIdNode->getText() << "'." << std::endl;
-            continue;
-        }
-        // 获取参数名称
-        std::string param_name_str = currentIdNode->getText();
-        const char * param_name_cstr = param_name_str.c_str();
-
-        // 获取参数ID的行号 (create_func_formal_param 需要 uint32_t)
-        uint32_t param_line_no = static_cast<uint32_t>(currentIdNode->getSymbol()->getLine());
-
-        //  调用 create_func_formal_param 创建单个形参的 AST 节点
-        ast_node * single_formal_param_node = create_func_formal_param(param_type_attribute,param_line_no, param_name_cstr);
-
-        // 2d. 将创建的单个形参节点添加到形参列表节点的子节点中
-        if (!formal_params_list_node->insert_son_node(single_formal_param_node)) {
-            std::cerr << "Error: Failed to insert formal parameter '" << param_name_str << "' into parameter list node."
-                      << std::endl;
-            // 清理 single_formal_param_node 因为它没有被成功插入
-            delete single_formal_param_node; // 假设 ast_node 需要手动 delete 如果未被父节点接管
-            // 可以选择继续或中止
-            continue;
-        }
-    }
-
-    // 3. 返回包装了整个形参列表节点的 std::any
     return std::any(formal_params_list_node);
 }
 /// @brief 非终结运算符funcDef的遍历
@@ -719,14 +701,41 @@ std::any MiniCCSTVisitor::visitPrimaryExp(MiniCParser::PrimaryExpContext * ctx)
 
 std::any MiniCCSTVisitor::visitLVal(MiniCParser::LValContext * ctx)
 {
-    // 识别文法产生式：lVal: T_ID;
+    // 识别文法产生式：lVal: T_ID(T_L_BRACKET expr T_R_BRACKET)*;
     // 获取ID的名字
     auto varId = ctx->T_ID()->getText();
 
     // 获取行号
     int64_t lineNo = (int64_t) ctx->T_ID()->getSymbol()->getLine();
 
-    return ast_node::New(varId, lineNo);
+    // 获取所有下标表达式的 CST 节点列表
+    auto indexExprContexts = ctx->expr();
+
+    if (!indexExprContexts.empty()) {
+        // 有数组下标，这是一个数组元素访问
+
+        // 创建代表数组变量名本身的 AST 节点
+        ast_node * baseVarNode = ast_node::New(varId, lineNo);
+
+        // 收集所有下标表达式的 AST 节点
+        ast_node * indicesContainerNode =
+            create_contain_node(ast_operator_type::AST_OP_ARRAY_INDEX);
+        for (MiniCParser::ExprContext * exprCtx: indexExprContexts) {
+            ast_node * singleIndexAstNode = std::any_cast<ast_node *>(visitExpr(exprCtx));
+            if (singleIndexAstNode) {
+                (void) indicesContainerNode->insert_son_node(singleIndexAstNode);
+            }
+        }
+
+        // 创建数组访问节点
+        return ast_node::New(ast_operator_type::AST_OP_ARRAY,
+                             baseVarNode,
+                             indicesContainerNode,
+                             nullptr);
+    } else {
+        // 没有数组下标
+        return ast_node::New(varId, lineNo);
+    }
 }
 
 std::any MiniCCSTVisitor::visitVarDecl(MiniCParser::VarDeclContext * ctx)
@@ -758,13 +767,20 @@ std::any MiniCCSTVisitor::visitVarDecl(MiniCParser::VarDeclContext * ctx)
 
 std::any MiniCCSTVisitor::visitVarDef(MiniCParser::VarDefContext * ctx)
 {
-    // varDef: T_ID(T_ASSIGN expr)?;
+    // varDef: T_ID arrayDimensions?(T_ASSIGN expr)?;
 
     auto varId = ctx->T_ID()->getText();
 
     // 获取行号
     int64_t lineNo = (int64_t) ctx->T_ID()->getSymbol()->getLine();
 
+    if (ctx->arrayDimensions()) {
+		// 数组维度
+		// 识别 varDef: T_ID arrayDimensions
+		auto arrayDimensionsNode = std::any_cast<ast_node *>(visitArrayDimensions(ctx->arrayDimensions()));
+		// 创建数组变量定义节点，孩子为ID和ArrayDimensions
+		return ast_node::New(ast_operator_type::AST_OP_ARRAY, ast_node::New(varId, lineNo), arrayDimensionsNode, nullptr);
+	}
     if (ctx->T_ASSIGN()) {
 		// 变量定义有初始值
 		// 识别 varDef: T_ID T_ASSIGN expr
@@ -778,6 +794,49 @@ std::any MiniCCSTVisitor::visitVarDef(MiniCParser::VarDefContext * ctx)
 	}
 }
 
+
+std::any MiniCCSTVisitor::visitArrayDimensions(MiniCParser::ArrayDimensionsContext * ctx)
+{
+    // 识别的文法产生式：arrayDimensions : (T_L_BRACKET expr T_R_BRACKET)+;
+
+	// 创建一个数组维度节点
+	ast_node * arrayDimensionsNode = create_contain_node(ast_operator_type::AST_OP_ARRAY_INDEX);
+
+	// 遍历每个维度
+	for (auto & dimCtx: ctx->expr()) {
+		// 获取每个维度的表达式节点
+		auto dimNode = std::any_cast<ast_node *>(visitExpr(dimCtx));
+		// 插入到数组维度节点中
+		(void) arrayDimensionsNode->insert_son_node(dimNode);
+	}
+
+	return arrayDimensionsNode;
+}
+
+std::any MiniCCSTVisitor::visitArrayParamDimensions(MiniCParser::ArrayParamDimensionsContext * ctx)
+{
+    // 识别的文法产生式(T_L_BRACKET expr? T_R_BRACKET) (T_L_BRACKET expr T_R_BRACKET)*;
+    // 创建一个数组维度节点
+    ast_node * arrayParamDimensionsNode = create_contain_node(ast_operator_type::AST_OP_ARRAY_INDEX);
+    // 遍历每个维度
+    if (ctx->expr().empty()) {
+		// 没有维度表达式，直接返回空的数组维度节点
+		return arrayParamDimensionsNode;
+    }
+    else if (ctx->expr().size() == 1) {
+		// 只有一个维度表达式
+		auto dimNode = std::any_cast<ast_node *>(visitExpr(ctx->expr()[0]));
+		(void) arrayParamDimensionsNode->insert_son_node(dimNode);
+	} else {
+		// 有多个维度表达式
+		for (auto & dimCtx: ctx->expr()) {
+			auto dimNode = std::any_cast<ast_node *>(visitExpr(dimCtx));
+			(void) arrayParamDimensionsNode->insert_son_node(dimNode);
+		}
+	}
+
+	return arrayParamDimensionsNode;
+}
 std::any MiniCCSTVisitor::visitBasicType(MiniCParser::BasicTypeContext * ctx)
 {
     // basicType: T_INT;

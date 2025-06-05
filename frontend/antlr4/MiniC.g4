@@ -13,9 +13,10 @@ grammar MiniC;
 // 源文件编译单元定义
 compileUnit: (funcDef | varDecl)* EOF;
 
-
+// 函数形参定义，支持数组参数
+formalParam: basicType T_ID arrayParamDimensions?;
 // 形参列表
-formalParamList: basicType T_ID (T_COMMA basicType T_ID)*;
+formalParamList: formalParam (T_COMMA formalParam)*;
 
 // 函数定义，支持形参，支持返回void类型
 funcDef: (T_INT|T_VOID) T_ID T_L_PAREN formalParamList? T_R_PAREN block;
@@ -36,7 +37,13 @@ varDecl: basicType varDef (T_COMMA varDef)* T_SEMICOLON;
 basicType: T_INT;
 
 // 变量定义,可以是一个赋值语句，或者不赋值
-varDef: T_ID(T_ASSIGN expr)?;
+varDef: T_ID arrayDimensions?(T_ASSIGN expr)?;
+
+// 变量数组定义
+arrayDimensions: (T_L_BRACKET expr T_R_BRACKET)+;
+
+//形参数组定义
+arrayParamDimensions: (T_L_BRACKET expr? T_R_BRACKET) (T_L_BRACKET expr T_R_BRACKET)*;
 
 
 // 目前语句支持return和赋值语句
@@ -97,7 +104,7 @@ realParamList: expr (T_COMMA expr)*;
 
 
 // 左值表达式
-lVal: T_ID;
+lVal: T_ID (T_L_BRACKET expr T_R_BRACKET)*;
 
 // 用正规式来进行词法规则的描述
 
@@ -138,8 +145,8 @@ T_BREAK: 'break';
 T_CONTINUE: 'continue';
 
 T_ID: [a-zA-Z_][a-zA-Z0-9_]*;
-// 无符号整数定义，支持十进制、八进制和十六进制 十六进制以 0x 或 0X 开头，后跟十六进制数字 [0-9a-fA-F]+ 八进制以 0 开头，后跟零个或多个八进制数字 [0-7]*
 
+// 无符号整数定义，支持十进制、八进制和十六进制 十六进制以 0x 或 0X 开头，后跟十六进制数字 [0-9a-fA-F]+ 八进制以 0 开头，后跟零个或多个八进制数字 [0-7]*
 T_DIGIT:
 	'0' [xX] [0-9a-fA-F]+ // 十六进制
 	| '0' [0-7]* // 八进制，0被八进制匹配

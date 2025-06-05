@@ -19,6 +19,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitFormalParam(MiniCParser::FormalParamContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitFormalParamList(MiniCParser::FormalParamListContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -48,6 +52,14 @@ public:
   }
 
   virtual std::any visitVarDef(MiniCParser::VarDefContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitArrayDimensions(MiniCParser::ArrayDimensionsContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitArrayParamDimensions(MiniCParser::ArrayParamDimensionsContext *ctx) override {
     return visitChildren(ctx);
   }
 

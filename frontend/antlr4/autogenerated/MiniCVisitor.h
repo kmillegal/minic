@@ -21,6 +21,8 @@ public:
    */
     virtual std::any visitCompileUnit(MiniCParser::CompileUnitContext *context) = 0;
 
+    virtual std::any visitFormalParam(MiniCParser::FormalParamContext *context) = 0;
+
     virtual std::any visitFormalParamList(MiniCParser::FormalParamListContext *context) = 0;
 
     virtual std::any visitFuncDef(MiniCParser::FuncDefContext *context) = 0;
@@ -36,6 +38,10 @@ public:
     virtual std::any visitBasicType(MiniCParser::BasicTypeContext *context) = 0;
 
     virtual std::any visitVarDef(MiniCParser::VarDefContext *context) = 0;
+
+    virtual std::any visitArrayDimensions(MiniCParser::ArrayDimensionsContext *context) = 0;
+
+    virtual std::any visitArrayParamDimensions(MiniCParser::ArrayParamDimensionsContext *context) = 0;
 
     virtual std::any visitReturnStatement(MiniCParser::ReturnStatementContext *context) = 0;
 

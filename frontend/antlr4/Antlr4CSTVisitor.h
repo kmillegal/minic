@@ -42,6 +42,11 @@ protected:
     /// @return AST的节点
     std::any visitCompileUnit(MiniCParser::CompileUnitContext * ctx) override;
 
+    /// @brief 非终结运算符formalParam的遍历
+    /// @param ctx CST上下文
+    /// @return AST的节点
+    std::any visitFormalParam(MiniCParser::FormalParamContext * ctx) override;
+
     /// @brief 非终结运算符formalParamList的遍历
     /// @param ctx CST上下文
     /// @return AST的节点
@@ -230,6 +235,21 @@ protected:
     /// @return std::any AST的节点
     ///
     std::any visitVarDef(MiniCParser::VarDefContext * ctx) override;
+
+    ///
+    /// @brief 非终结符ArrayDimensions的分析
+    /// @param ctx CST上下文
+    /// @return std::any AST的节点
+    ///
+    std::any visitArrayDimensions(MiniCParser::ArrayDimensionsContext * ctx) override;
+
+    ///
+    /// @brief 非终结符ArrayParamDimensions的分析
+    /// @param ctx CST上下文
+    /// @return std::any AST的节点
+	///
+    std::any visitArrayParamDimensions(MiniCParser::ArrayParamDimensionsContext * ctx) override;
+
 
     ///
     /// @brief 非终结符BasicType的分析
