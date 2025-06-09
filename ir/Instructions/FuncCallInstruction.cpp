@@ -69,8 +69,26 @@ void FuncCallInstruction::toString(std::string & str)
         for (int32_t k = 0; k < operandsNum; ++k) {
 
             auto operand = getOperand(k);
+            Type * varType = operand->getType();
+            if (varType->isArrayType()) {
+                Type * currentType = varType;
+                std::vector<uint64_t> dims;
 
-            str += operand->getType()->toString() + " " + operand->getIRName();
+                // 递归解析，分离出基础类型和所有维度
+                while (currentType->isArrayType()) {
+                    ArrayType * arrayTy = static_cast<ArrayType *>(currentType);
+                    dims.push_back(arrayTy->getNumElements());
+                    currentType = arrayTy->getElementType();
+                }
+
+                str += currentType->toString(); // 基础类型
+                str += " " + operand->getIRName();  // IR中的名字
+                for (uint64_t dim: dims) {
+                    str += "[" + std::to_string(dim) + "]"; // 维度
+                }
+            } else {
+                str += operand->getType()->toString() + " " + operand->getIRName();
+            }
 
             if (k != (operandsNum - 1)) {
                 str += ", ";

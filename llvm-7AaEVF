@@ -1,0 +1,90 @@
+@n = global i32 0, align 4
+define i32 @test(i32 %t0) {
+	%l1 = alloca i32, align 4
+	%l2 = alloca i32, align 4
+	store i32 %t0, i32* %l1, align 4
+	%t5 = load i32, i32* @n, align 4
+	%t3 = add nsw i32 %t5, 1
+	store i32 %t3, i32* @n, align 4
+	%t6 = load i32, i32* %l1, align 4
+	%t4 = add nsw i32 %t6, 1
+	store i32 %t4, i32* %l2, align 4
+	%t7 = load i32, i32* %l2, align 4
+	ret i32 %t7
+}
+define i32 @main() {
+	%l0 = alloca i32, align 4
+	%l1 = alloca i32, align 4
+	%l2 = alloca [4 x i32], align 16
+	%t3 = mul nsw i32 0, 4
+	%t21 = getelementptr inbounds [4 x i32], [4 x i32]* %l2, i64 0, i64 0
+	%t22 = bitcast i32* %t21 to i8*
+	%t24 = sext i32 %t3 to i64
+	%t23 = getelementptr inbounds i8, i8* %t22, i64 %t24
+	%t4 = bitcast i8* %t23 to i32*
+	store i32 1, i32* %t4, align 4
+	%t5 = mul nsw i32 1, 4
+	%t25 = getelementptr inbounds [4 x i32], [4 x i32]* %l2, i64 0, i64 0
+	%t26 = bitcast i32* %t25 to i8*
+	%t28 = sext i32 %t5 to i64
+	%t27 = getelementptr inbounds i8, i8* %t26, i64 %t28
+	%t6 = bitcast i8* %t27 to i32*
+	store i32 2, i32* %t6, align 4
+	%t7 = mul nsw i32 2, 4
+	%t29 = getelementptr inbounds [4 x i32], [4 x i32]* %l2, i64 0, i64 0
+	%t30 = bitcast i32* %t29 to i8*
+	%t32 = sext i32 %t7 to i64
+	%t31 = getelementptr inbounds i8, i8* %t30, i64 %t32
+	%t8 = bitcast i8* %t31 to i32*
+	store i32 3, i32* %t8, align 4
+	%t9 = mul nsw i32 3, 4
+	%t33 = getelementptr inbounds [4 x i32], [4 x i32]* %l2, i64 0, i64 0
+	%t34 = bitcast i32* %t33 to i8*
+	%t36 = sext i32 %t9 to i64
+	%t35 = getelementptr inbounds i8, i8* %t34, i64 %t36
+	%t10 = bitcast i8* %t35 to i32*
+	store i32 4, i32* %t10, align 4
+	store i32 2, i32* @n, align 4
+	%t11 = call i32 (...) @getint()
+	store i32 %t11, i32* %l1, align 4
+	%t37 = load i32, i32* %l1, align 4
+	%t12 = call i32 @test(i32 %t37)
+	%t38 = load i32, i32* @n, align 4
+	%t13 = mul nsw i32 %t38, 4
+	%t39 = getelementptr inbounds [4 x i32], [4 x i32]* %l2, i64 0, i64 0
+	%t40 = bitcast i32* %t39 to i8*
+	%t42 = sext i32 %t13 to i64
+	%t41 = getelementptr inbounds i8, i8* %t40, i64 %t42
+	%t14 = bitcast i8* %t41 to i32*
+	store i32 %t12, i32* %t14, align 4
+	%t15 = mul nsw i32 2, 4
+	%t43 = getelementptr inbounds [4 x i32], [4 x i32]* %l2, i64 0, i64 0
+	%t44 = bitcast i32* %t43 to i8*
+	%t46 = sext i32 %t15 to i64
+	%t45 = getelementptr inbounds i8, i8* %t44, i64 %t46
+	%t16 = bitcast i8* %t45 to i32*
+	%t17 = load i32, i32* %t16, align 4
+	call void @putint(i32 %t17)
+	%t18 = mul nsw i32 3, 4
+	%t47 = getelementptr inbounds [4 x i32], [4 x i32]* %l2, i64 0, i64 0
+	%t48 = bitcast i32* %t47 to i8*
+	%t50 = sext i32 %t18 to i64
+	%t49 = getelementptr inbounds i8, i8* %t48, i64 %t50
+	%t19 = bitcast i8* %t49 to i32*
+	%t20 = load i32, i32* %t19, align 4
+	call void @putint(i32 %t20)
+	store i32 0, i32* %l0, align 4
+	%t51 = load i32, i32* %l0, align 4
+	ret i32 %t51
+}
+declare i32 @getint(...);
+declare i32 @getch(...);
+declare void @putint(i32);
+declare void @putch(i32);
+declare void @putstr(i8*);
+declare i32 @getarray(i32*);
+declare void @putarray(i32, i32*);
+declare float @getfloat(...);
+declare void @putfloat(float);
+declare i32 @getfarray(float*);
+declare void @putfarray(i32, float*);

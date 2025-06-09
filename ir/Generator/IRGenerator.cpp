@@ -410,52 +410,33 @@ bool IRGenerator::ir_function_formal_param(ast_node * node)
 // 请注意这些指令要放在Entry指令后面，因此处理的先后上要注意。
 
 {
-    // 前置检查和获取当前函数
+    // 获取当前函数
     Function * current_function = module->getCurrentFunction();
-    if (!current_function) {
-        minic_log(LOG_ERROR,
-                  "ir_function_formal_param: Cannot generate IR for formal parameter outside of a function context "
-                  "at line %lld.",
-                  (long long) (node ? node->line_no : -1));
-        return false;
-    }
-
-    if (!node || node->sons.size() < 2) {
-        minic_log(LOG_ERROR,
-                  "ir_function_formal_param: AST node for formal parameter is malformed (expected 2 children) at "
-                  "line %lld.",
-                  (long long) (node ? node->line_no : -1));
-        return false;
-    }
 
     ast_node * type_ast_node = node->sons[0]; // 类型节点
-    ast_node * id_ast_node = node->sons[1];   // 变量名节点
+    ast_node * declaration_node = node->sons[1];
 
-    // 提取参数名用于日志和创建对象
     std::string param_name;
-    if (id_ast_node && id_ast_node->node_type == ast_operator_type::AST_OP_LEAF_VAR_ID && !id_ast_node->name.empty()) {
+    ast_node * id_ast_node; // 指向代表参数名的那个叶子节点
+
+    Type * original_type = type_ast_node->type;
+    Type * effective_param_type = nullptr;
+    if (declaration_node->node_type == ast_operator_type::AST_OP_ARRAY_DECL) {
+        // 参数是数组
+        id_ast_node = declaration_node->sons[0];
         param_name = id_ast_node->name;
+
+        // 创建一个新的、最外层维度为0的 ArrayType 来表示指针
+        effective_param_type = new ArrayType(original_type, 0);
     } else {
-        minic_log(LOG_ERROR,
-                  "ir_function_formal_param: Invalid identifier node for parameter at line %lld.",
-                  (long long) (id_ast_node ? id_ast_node->line_no : (node ? node->line_no : -1)));
-        return false;
+        // 参数是普通变量
+        id_ast_node = declaration_node;
+        param_name = id_ast_node->name;
+        effective_param_type = original_type;
     }
 
-    // 提取参数类型
-    Type * param_type;
-    if (type_ast_node && type_ast_node->node_type == ast_operator_type::AST_OP_LEAF_TYPE && type_ast_node->type) {
-        param_type = type_ast_node->type;
-    } else {
-        minic_log(LOG_ERROR,
-                  "ir_function_formal_param: Invalid type node for parameter '%s' at line %lld.",
-                  param_name.c_str(),
-                  (long long) (type_ast_node ? type_ast_node->line_no : (node ? node->line_no : -1)));
-        return false;
-    }
-
-    // 创建 FormalParam 对象。这个对象代表了参数传递的"槽位"或接口。
-    FormalParam * formal_param_value = new FormalParam(param_type, param_name);
+    // 创建 FormalParam 对象。这个对象代表了参数传递的接口。
+    FormalParam * formal_param_value = new FormalParam(effective_param_type, param_name);
 
     // 将创建的 FormalParam 对象添加到 IRGenerator 的临时收集中
     m_collected_formal_params.push_back(formal_param_value);
@@ -465,30 +446,13 @@ bool IRGenerator::ir_function_formal_param(ast_node * node)
     node->val = formal_param_value;
 
     // 为函数体内部使用创建一个局部变量 (param_local_var)。
-
-    LocalVariable * param_local_var = static_cast<LocalVariable *>(module->newVarValue(param_type, param_name));
-    if (!param_local_var) {
-        minic_log(LOG_ERROR,
-                  "ir_function_formal_param: Failed to create local variable copy for parameter '%s' in function '%s'.",
-                  param_name.c_str(),
-                  current_function->getName().c_str());
-        delete formal_param_value; // 清理已分配的
-        return false;
-    }
+    LocalVariable * param_local_var = static_cast<LocalVariable *>(module->newVarValue(effective_param_type, param_name));
     // 将此函数内部的局部变量与参数的标识符AST节点(id_ast_node)关联。
     id_ast_node->val = param_local_var;
 
     // 创建一个赋值指令 (MoveInstruction)，用于将实际参数的值（存储在 formal_param_value 代表的槽中）
     // 拷贝到函数体内部使用的局部变量 (param_local_var) 上。
     MoveInstruction * moveInst = new MoveInstruction(current_function, param_local_var, formal_param_value);
-    if (!moveInst) { // 几乎不可能
-        minic_log(LOG_ERROR,
-                  "ir_function_formal_param: Failed to allocate MoveInstruction for parameter '%s'.",
-                  param_name.c_str());
-        delete formal_param_value;
-        // param_local_var 可能是由 module 管理的，或者也需要 delete
-        return false;
-    }
 
     // 将此 MoveInstruction 添加到当前函数的IR代码列表中。
     // 这应该在函数入口指令 (EntryInstruction) 之后，实际函数体代码之前。
@@ -1893,6 +1857,125 @@ bool IRGenerator::ir_variable_declare(ast_node * node)
 
     return true;
 }
+// bool IRGenerator::ir_array_declare(ast_node * node)
+
+// {
+
+// 	ast_node * array_name_node = node->sons[0];
+
+// 	ast_node * index_node = node->sons[1];
+
+// 	Value * base_addr_val = module->findVarValue(array_name_node->name);
+
+// 	// 从基地址指针获取数组类型
+
+// 	const Type * base_type = base_addr_val->getType();
+
+// 	const Type * type_iterator = base_type;
+
+// 	// 翻译所有下标表达式
+
+// 	std::vector<Value *> index_vals;
+
+// 	for (ast_node * index_expr_ast: index_node->sons)
+//     {
+// 		ast_node * translated_index_node = ir_visit_ast_node(index_expr_ast);
+
+//         if (!translated_index_node)
+// 			return false;
+
+//         node->blockInsts.addInst(translated_index_node->blockInsts);
+//         index_vals.push_back(translated_index_node->val);
+//     }
+
+// // 迭代计算元素偏移量
+
+// 	Value * element_offset = index_vals[0]; // 元素偏移量累加器
+
+//     const ArrayType * firstArrayTy = static_cast<const ArrayType *>(type_iterator);
+
+//     type_iterator = firstArrayTy->getElementType();
+
+//     for (size_t i = 1; i < index_vals.size(); ++i)
+//     {
+
+//         Value * current_index_val = index_vals[i];
+
+//         const ArrayType * currentArrayTy = static_cast<const ArrayType *>(type_iterator);
+
+//         Value * dim_size_val = new ConstInt(currentArrayTy->getNumElements());
+
+//         element_offset = new BinaryInstruction(module->getCurrentFunction(),
+
+// 													IRInstOperator::IRINST_OP_MUL_I,
+
+// 												element_offset,
+
+// 													dim_size_val,
+
+// 														IntegerType::getTypeInt());
+
+//         node->blockInsts.addInst(static_cast<Instruction *>(element_offset));
+
+//         // running_offset = running_offset + idxi (idxi 是当前维度的下标值)
+
+// 		element_offset = new BinaryInstruction(module->getCurrentFunction(),
+
+// IRInstOperator::IRINST_OP_ADD_I,
+
+// element_offset,
+
+// current_index_val,
+
+// IntegerType::getTypeInt());
+
+//         node->blockInsts.addInst(static_cast<Instruction *>(element_offset));
+
+//         // 更新类型迭代器，为下一次循环做准备
+
+// type_iterator = currentArrayTy->getElementType();
+
+
+//     }
+
+//     // 计算最终的字节偏移量
+
+// 	int32_t element_size = type_iterator->getSize();
+
+//    Value * element_size_val = new ConstInt(element_size);
+
+//     Value * byte_offset = new BinaryInstruction(module->getCurrentFunction(),
+
+//  IRInstOperator::IRINST_OP_MUL_I,
+
+// element_offset,
+
+//  element_size_val,
+
+// IntegerType::getTypeInt());
+
+//      node->blockInsts.addInst(static_cast<Instruction *>(byte_offset));
+
+//     // 计算最终地址 = 基地址 + 字节偏移量
+
+// 	const Type * final_address_type = PointerType::get(type_iterator);
+
+// 	Value * final_address = new BinaryInstruction(module->getCurrentFunction(),
+
+// 													IRInstOperator::IRINST_OP_ADD_I,
+
+// 													base_addr_val,
+
+// 													byte_offset,
+
+// 													const_cast<Type *>(final_address_type));
+
+//     node->blockInsts.addInst(static_cast<Instruction *>(final_address));
+
+//     node->val = final_address;
+
+//     return true;
+// }
 
 /// @brief 数组元素声明节点翻译成线性中间IR
 /// @param node AST节点
@@ -1905,7 +1988,16 @@ bool IRGenerator::ir_array_declare(ast_node * node)
     Value * base_addr_val = module->findVarValue(array_name_node->name);
     // 从基地址指针获取数组类型
     const Type * base_type = base_addr_val->getType();
-    const Type * type_iterator = base_type;
+    const Type * type_iterator = nullptr;
+
+    if (base_type->isArrayType() && static_cast<const ArrayType *>(base_type)->getNumElements() == 0) {
+        // 函数参数
+        type_iterator = static_cast<const ArrayType *>(base_type)->getElementType();
+    } else {
+        // 局部/全局数组
+        type_iterator = base_type;
+    }
+
     // 翻译所有下标表达式
     std::vector<Value *> index_vals;
     for (ast_node * index_expr_ast: index_node->sons) {
@@ -1917,11 +2009,17 @@ bool IRGenerator::ir_array_declare(ast_node * node)
     }
 
     // 迭代计算元素偏移量
-    Value * element_offset = index_vals[0]; // 元素偏移量累加器
+    Value* element_offset = nullptr;
+    if (index_vals.empty()) {
+        // 错误：数组访问必须有下标
+        return false;
+    }
 
-    const ArrayType * firstArrayTy = static_cast<const ArrayType *>(type_iterator);
-    type_iterator = firstArrayTy->getElementType();
-
+    // 偏移量从第一个下标开始
+    element_offset = index_vals[0];
+    if (type_iterator->isArrayType()) {
+        type_iterator = static_cast<const ArrayType *>(type_iterator)->getElementType();
+    }
     for (size_t i = 1; i < index_vals.size(); ++i) {
 
         Value * current_index_val = index_vals[i];

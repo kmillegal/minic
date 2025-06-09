@@ -79,21 +79,37 @@ std::any MiniCCSTVisitor::visitCompileUnit(MiniCParser::CompileUnitContext * ctx
 std::any MiniCCSTVisitor::visitFormalParam(MiniCParser::FormalParamContext * ctx)
 {
     // 识别的文法产生式：formalParam : basicType T_ID arrayParamDimensions?;
-    ast_node * formal_param_node;
-    // 创建代表单个形参的 AST 节点 (AST_OP_FUNC_FORMAL_PARAM)
-    type_attr typeAttr = std::any_cast<type_attr>(visitBasicType(ctx->basicType()));
-    // 获取所有 T_ID 终端节点 (用于名称和行号)
-    auto idNode = ctx->T_ID()->getText();
+
+    // 1. 获取基本类型节点
+    auto typeAttr = std::any_cast<type_attr>(visitBasicType(ctx->basicType()));
+    // 假设您有一个函数可以从类型属性创建类型节点
+    ast_node * type_node = create_type_node(typeAttr);
+
+    // 2. 获取变量名和行号
+    std::string idName = ctx->T_ID()->getText();
     int64_t lineNo = (int64_t) ctx->T_ID()->getSymbol()->getLine();
-    formal_param_node = create_func_formal_param(typeAttr, lineNo, idNode.c_str());
-    if( ctx->arrayParamDimensions() ) {
-        auto arrayParamDimensionsNode = std::any_cast<ast_node *>(visitArrayParamDimensions(ctx->arrayParamDimensions()));
-        return ast_node::New(ast_operator_type::AST_OP_ARRAY_DECL,//TODO 不确定
-                             ast_node::New(idNode, lineNo),
-                             arrayParamDimensionsNode,
-                             nullptr);
+
+    // 3. 创建变量声明部分 (可能是简单变量，也可能是数组)
+    ast_node * declaration_node;
+    if (ctx->arrayParamDimensions()) {
+        // --- 情况A: 参数是数组 ---
+        // 创建代表变量名的叶子节点
+        ast_node * id_node = ast_node::New(idName, lineNo);
+        // 获取数组维度信息
+        auto dimensions_node = std::any_cast<ast_node *>(visitArrayParamDimensions(ctx->arrayParamDimensions()));
+        declaration_node = ast_node::New(ast_operator_type::AST_OP_ARRAY_DECL, id_node,dimensions_node,nullptr);
+    } else {
+        // --- 情况B: 参数是普通变量 ---
+        // 直接创建一个代表变量名的叶子节点
+        declaration_node = ast_node::New(idName, lineNo);
     }
-    return formal_param_node; // 返回单个形参节点
+
+    // 4. 创建统一的形参父节点
+    //    这个节点将类型和声明组合在一起
+    ast_node * formal_param_node =
+        ast_node::New(ast_operator_type::AST_OP_FUNC_FORMAL_PARAM, type_node, declaration_node,nullptr);
+
+    return std::any(formal_param_node);
 }
 
 ///  @brief 非终结运算符formalParamList的遍历

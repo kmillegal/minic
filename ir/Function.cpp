@@ -97,10 +97,26 @@ void Function::toString(std::string & str)
         } else {
             str += ", ";
         }
+        Type * varType = param->getType();
+        if (varType->isArrayType()) {
+            Type * currentType = varType;
+            std::vector<uint64_t> dims;
 
-        std::string param_str = param->getType()->toString() + param->getIRName();
+            // 递归解析，分离出基础类型和所有维度
+            while (currentType->isArrayType()) {
+                ArrayType * arrayTy = static_cast<ArrayType *>(currentType);
+                dims.push_back(arrayTy->getNumElements());
+                currentType = arrayTy->getElementType();
+            }
 
-        str += param_str;
+            str += currentType->toString(); // 基础类型
+            str += " " + param->getIRName();  // IR中的名字
+            for (uint64_t dim: dims) {
+                str += "[" + std::to_string(dim) + "]"; // 维度
+            }
+        } else {
+            str += param->getType()->toString() + param->getIRName();
+        }
     }
 
     str += ")\n";
