@@ -88,7 +88,7 @@ std::any MiniCCSTVisitor::visitFormalParam(MiniCParser::FormalParamContext * ctx
     formal_param_node = create_func_formal_param(typeAttr, lineNo, idNode.c_str());
     if( ctx->arrayParamDimensions() ) {
         auto arrayParamDimensionsNode = std::any_cast<ast_node *>(visitArrayParamDimensions(ctx->arrayParamDimensions()));
-        return ast_node::New(ast_operator_type::AST_OP_ARRAY,
+        return ast_node::New(ast_operator_type::AST_OP_ARRAY_DECL,//TODO 不确定
                              ast_node::New(idNode, lineNo),
                              arrayParamDimensionsNode,
                              nullptr);
@@ -728,7 +728,7 @@ std::any MiniCCSTVisitor::visitLVal(MiniCParser::LValContext * ctx)
         }
 
         // 创建数组访问节点
-        return ast_node::New(ast_operator_type::AST_OP_ARRAY,
+        return ast_node::New(ast_operator_type::AST_OP_ARRAY_ACCESS,
                              baseVarNode,
                              indicesContainerNode,
                              nullptr);
@@ -779,9 +779,9 @@ std::any MiniCCSTVisitor::visitVarDef(MiniCParser::VarDefContext * ctx)
 		// 识别 varDef: T_ID arrayDimensions
 		auto arrayDimensionsNode = std::any_cast<ast_node *>(visitArrayDimensions(ctx->arrayDimensions()));
 		// 创建数组变量定义节点，孩子为ID和ArrayDimensions
-		return ast_node::New(ast_operator_type::AST_OP_ARRAY, ast_node::New(varId, lineNo), arrayDimensionsNode, nullptr);
+		return ast_node::New(ast_operator_type::AST_OP_ARRAY_DECL, ast_node::New(varId, lineNo), arrayDimensionsNode, nullptr);
 	}
-    if (ctx->T_ASSIGN()) {
+    else if (ctx->T_ASSIGN()) {
 		// 变量定义有初始值
 		// 识别 varDef: T_ID T_ASSIGN expr
 		auto exprNode = std::any_cast<ast_node *>(visitExpr(ctx->expr()));
@@ -800,9 +800,9 @@ std::any MiniCCSTVisitor::visitArrayDimensions(MiniCParser::ArrayDimensionsConte
     // 识别的文法产生式：arrayDimensions : (T_L_BRACKET expr T_R_BRACKET)+;
 
 	// 创建一个数组维度节点
-	ast_node * arrayDimensionsNode = create_contain_node(ast_operator_type::AST_OP_ARRAY_INDEX);
+    ast_node * arrayDimensionsNode = create_contain_node(ast_operator_type::AST_OP_ARRAY_DIMENSIONS);
 
-	// 遍历每个维度
+    // 遍历每个维度
 	for (auto & dimCtx: ctx->expr()) {
 		// 获取每个维度的表达式节点
 		auto dimNode = std::any_cast<ast_node *>(visitExpr(dimCtx));

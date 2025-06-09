@@ -24,6 +24,7 @@
 #include "LocalVariable.h"
 #include "MemVariable.h"
 #include "IRCode.h"
+#include "ArrayType.h"
 
 ///
 /// @brief 描述函数信息的类，是全局静态存储，其Value的类型为FunctionType
@@ -143,6 +144,12 @@ public:
     /// @param type 变量类型
     /// @param existInit 缺省为true。若真，则已存在需要进行初始化，否则什么都不做
     LocalVariable * newLocalVarValue(Type * type, std::string name = "", int32_t scope_level = 1);
+
+    /// @brief 新建数组型Value。
+    /// @param type 变量类型
+    /// @param name 变量ID
+    /// @param scope_level 局部变量的作用域层级
+	LocalVariable * newLocalArrayValue(Type * type, std::string name = "", int32_t scope_level = 1);
 
     /// @brief 新建一个内存型的Value，并加入到符号表，用于后续释放空间
     /// \param type 变量类型

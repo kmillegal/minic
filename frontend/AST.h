@@ -142,10 +142,16 @@ enum class ast_operator_type : int {
     AST_OP_CONTINUE,
 
     /// @brief 数组定义运算符
-    AST_OP_ARRAY,
+    AST_OP_ARRAY_DECL,
+
+    /// @brief 数组访问运算符
+    AST_OP_ARRAY_ACCESS,
 
     /// @brief 数组下标
     AST_OP_ARRAY_INDEX,
+
+    /// @brief 数组维度
+    AST_OP_ARRAY_DIMENSIONS,
 
     /// @brief 最大标识符，表示非法运算符
     AST_OP_MAX,

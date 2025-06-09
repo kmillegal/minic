@@ -74,6 +74,10 @@ enum class IRInstOperator : std::int8_t {
     IRINST_OP_BRANCH,
     /// @brief 比较指令
     IRINST_OP_CMP_I,
+    /// @brief 内存Store指令
+    IRINST_OP_STORE,
+    /// @brief 内存Load指令
+    IRINST_OP_LOAD,
 
     /// @brief 最大指令码，也是无效指令
     IRINST_OP_MAX

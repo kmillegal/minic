@@ -15,8 +15,9 @@
 /// </table>
 ///
 
+#include "Instruction.h"
 #include "VoidType.h"
-
+#include "PointerType.h"
 #include "MoveInstruction.h"
 
 ///
@@ -30,14 +31,39 @@ MoveInstruction::MoveInstruction(Function * _func, Value * _result, Value * _src
 {
     addOperand(_result);
     addOperand(_srcVal1);
+    if (_result->getType()->isPointerType()) {
+        this->op = IRInstOperator::IRINST_OP_STORE;
+
+    } else if (_srcVal1->getType()->isPointerType()) {
+        this->op = IRInstOperator::IRINST_OP_LOAD;
+        Type * pointer_type = _srcVal1->getType();
+        PointerType * src_ptr_type = static_cast<PointerType *>(pointer_type);
+        this->type = const_cast<Type *>(src_ptr_type->getPointeeType());
+    }
 }
 
 /// @brief 转换成字符串显示
 /// @param str 转换后的字符串
 void MoveInstruction::toString(std::string & str)
 {
-
-    Value *dstVal = getOperand(0), *srcVal = getOperand(1);
-
-    str = dstVal->getIRName() + " = " + srcVal->getIRName();
+    Value *resVal = getOperand(0), *srcVal = getOperand(1);
+    switch (op) {
+        case IRInstOperator::IRINST_OP_STORE:
+            // STORE 操作
+            str = "*" + resVal->getIRName() + " = " + srcVal->getIRName();
+            break;
+        case IRInstOperator::IRINST_OP_LOAD:
+            // LOAD 操作
+            str = resVal->getIRName() + " = *" + srcVal->getIRName();
+            break;
+        case IRInstOperator::IRINST_OP_ASSIGN:
+            // 赋值操作
+            str = resVal->getIRName() + " = " + srcVal->getIRName();
+            break;
+        default:
+            // 未知指令
+            Instruction::toString(str);
+            break;
+    }
 }
+

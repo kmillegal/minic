@@ -110,7 +110,7 @@ public:
     /// @param pointee
     /// @return const PointerType*
     ///
-    static const PointerType * get(Type * pointee)
+    static const PointerType * get(const Type * pointee)
     {
         static StorageSet<PointerType, PointerTypeHasher, PointerTypeEqual> storageSet;
         return storageSet.get(pointee);

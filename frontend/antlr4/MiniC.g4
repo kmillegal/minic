@@ -102,7 +102,6 @@ primaryExp: T_L_PAREN expr T_R_PAREN | T_DIGIT | lVal;
 // 实参列表
 realParamList: expr (T_COMMA expr)*;
 
-
 // 左值表达式
 lVal: T_ID (T_L_BRACKET expr T_R_BRACKET)*;
 

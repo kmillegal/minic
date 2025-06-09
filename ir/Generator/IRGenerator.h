@@ -173,6 +173,17 @@ protected:
     /// @return 翻译是否成功，true：成功，false：失败
     bool ir_continue(ast_node * node);
 
+    /// @brief 数组定义节点翻译成线性中间IR
+    /// @param node AST节点
+    /// @return 翻译是否成功，true：成功，false：失败
+    bool ir_array_declare(ast_node * node);
+
+    /// @brief 数组下标访问节点翻译成线性中间IR
+    /// @param node AST节点
+    /// @return 翻译是否成功，true：成功，false：失败
+    bool ir_array_access(ast_node * node);
+
+
     /// @brief 类型叶子节点翻译成线性中间IR
     /// @param node AST节点
     /// @return 翻译是否成功，true：成功，false：失败

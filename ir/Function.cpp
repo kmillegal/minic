@@ -19,6 +19,9 @@
 
 #include "IRConstant.h"
 #include "Function.h"
+#include "LocalVariable.h"
+#include "MoveInstruction.h"
+
 
 /// @brief 指定函数名字、函数类型的构造函数
 /// @param _name 函数名称
@@ -108,8 +111,29 @@ void Function::toString(std::string & str)
     for (auto & var: this->varsVector) {
 
         // 局部变量和临时变量需要输出declare语句
-        str += "\tdeclare " + var->getType()->toString() + " " + var->getIRName();
+        //str += "\tdeclare " + var->getType()->toString() + " " + var->getIRName();
+        str += "\tdeclare ";
+        Type * varType = var->getType();
 
+        if( varType->isArrayType()) {
+            Type * currentType = varType;
+            std::vector<uint64_t> dims;
+
+            // 递归解析，分离出基础类型和所有维度
+            while (currentType->isArrayType()) {
+                ArrayType * arrayTy = static_cast<ArrayType *>(currentType);
+                dims.push_back(arrayTy->getNumElements());
+                currentType = arrayTy->getElementType();
+            }
+
+            str += currentType->toString(); // 基础类型
+            str += " " + var->getIRName();  // IR中的名字
+            for (uint64_t dim: dims) {
+                str += "[" + std::to_string(dim) + "]"; // 维度
+            }
+        } else {
+            str += varType->toString() + " " + var->getIRName(); // 基础类型和IR名字
+		}
         std::string extraStr;
         std::string realName = var->getName();
         if (!realName.empty()) {
@@ -253,6 +277,21 @@ LocalVariable * Function::newLocalVarValue(Type * type, std::string name, int32_
     return varValue;
 }
 
+/// @brief 新建数组型Value。先检查是否存在，不存在则创建，否则失败
+/// @param type 变量类型
+/// @param name 变量ID
+/// @param scope_level 局部变量的作用域层级
+LocalVariable * Function::newLocalArrayValue(Type * type, std::string name, int32_t scope_level)
+{
+	// 创建变量并加入符号表
+	LocalVariable * varValue = new LocalVariable(type, name, scope_level);
+
+	// varsVector表中可能存在变量重名的信息
+	varsVector.push_back(varValue);
+
+	return varValue;
+}
+
 /// @brief 新建一个内存型的Value，并加入到符号表，用于后续释放空间
 /// \param type 变量类型
 /// \return 临时变量Value
@@ -307,6 +346,18 @@ void Function::renameIR()
     for (auto inst: this->getInterCode().getInsts()) {
         if (inst->getOp() == IRInstOperator::IRINST_OP_LABEL) {
             inst->setIRName(IR_LABEL_PREFIX + std::to_string(labelIndex++));
+        } else if (inst->getOp() == IRInstOperator::IRINST_OP_LOAD) {
+
+            // 先给 LOAD 指令本身命名
+            inst->setIRName(IR_TEMP_VARNAME_PREFIX + std::to_string(nameIndex++));
+
+            // 拿到它内部的目标操作数 Value
+            MoveInstruction * move_inst = static_cast<MoveInstruction *>(inst);
+            Value * dest_val = move_inst->getOperand(0); 
+
+            // 把指令的名字也赋给这个内部的 Value
+            dest_val->setIRName(inst->getIRName());
+
         } else if (inst->hasResultValue()) {
             inst->setIRName(IR_TEMP_VARNAME_PREFIX + std::to_string(nameIndex++));
         }

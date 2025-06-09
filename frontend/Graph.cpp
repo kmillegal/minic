@@ -137,11 +137,17 @@ string getNodeName(ast_node * astnode)
         case ast_operator_type::AST_OP_CONTINUE:
             nodeName = "continue";
             break;
-        case ast_operator_type::AST_OP_ARRAY:
-            nodeName = "array";
+        case ast_operator_type::AST_OP_ARRAY_DECL:
+            nodeName = "array-decl";
+            break;
+        case ast_operator_type::AST_OP_ARRAY_ACCESS:
+			nodeName = "array-access";
 			break;
         case ast_operator_type::AST_OP_ARRAY_INDEX:
             nodeName = "array-index";
+            break;
+        case ast_operator_type::AST_OP_ARRAY_DIMENSIONS:
+			nodeName = "array-dimensions";
 			break;
 
         default:

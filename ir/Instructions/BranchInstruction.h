@@ -20,7 +20,7 @@
 
 #include "Instruction.h"
 #include "LabelInstruction.h"
-#include "Value.h" // 条件是一个 Value
+#include "Value.h"
 #include "Function.h"
 
 ///
