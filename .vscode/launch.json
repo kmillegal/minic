@@ -76,7 +76,7 @@
 			"type": "cppdbg",
 			"request": "launch",
 			"program": "${workspaceFolder}/build/minic",
-			"args": ["-S", "-A", "-T", "-o", "tests/arr_dim.png", "tests/arr_dim.c"],
+			"args": ["-S", "-A", "-T", "-o", "tests/arr_side.png", "tests/arr_side.c"],
 			// 程序的入口（main函数的入口）是否停止
 			"stopAtEntry": true,
 			"cwd": "${workspaceFolder}",

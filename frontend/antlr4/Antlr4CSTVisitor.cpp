@@ -324,16 +324,22 @@ std::any MiniCCSTVisitor::visitIfStatement(MiniCParser::IfStatementContext * ctx
 
     ast_node * ifBlockNode = nullptr;
     // 遍历if语句块
-    if (!ctx->statement().empty())
-    {
-        ifBlockNode = std::any_cast<ast_node *>(visitStatement(ctx->statement(0)));
+    std::any ifBlockResult = visitStatement(ctx->statement(0));
+
+    if (ast_node ** node_ptr = std::any_cast<ast_node *>(&ifBlockResult)) {
+        // 转换成功，解引用指针以获得原始的 ast_node*
+        ifBlockNode = *node_ptr;
     }
 
     ast_node * elseBlockNode = nullptr;
 
     if (ctx->statement().size() > 1) {
         // 遍历else语句块
-        elseBlockNode = std::any_cast<ast_node *>(visitStatement(ctx->statement(1)));
+        std::any elseBlockResult = visitStatement(ctx->statement(1));
+        // 进行安全转换
+        if (ast_node ** node_ptr = std::any_cast<ast_node *>(&elseBlockResult)) {
+            elseBlockNode = *node_ptr;
+        }
     }
 
     // 创建if节点，其孩子为Expr和if语句块和else语句块

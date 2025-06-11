@@ -1543,9 +1543,9 @@ bool IRGenerator::ir_if(ast_node * node)
     }
 
     // AST结构: node->sons[0]=condition, node->sons[1]=then_block, node->sons[2]=else_block (optional)
-    if (node->sons.size() < 2) {
+    if (node->sons.empty()) {
         minic_log(LOG_ERROR,
-                  "Invalid if statement AST node: missing condition or then-block at line %lld.",
+                  "Invalid if statement AST node: missing condition  %lld.",
                   (long long) (node ? node->line_no : -1));
         return false;
     }
@@ -1553,7 +1553,7 @@ bool IRGenerator::ir_if(ast_node * node)
     ast_node * cond_node = node->sons[0];
     ast_node * then_node = node->sons[1];
     ast_node * else_node = nullptr;
-    bool has_else = (node->sons.size() > 2);
+    bool has_else = (node->sons.size() > 2 && node->sons[2] != nullptr);
 
     if (has_else) {
         else_node = node->sons[2];
@@ -1590,16 +1590,21 @@ bool IRGenerator::ir_if(ast_node * node)
 
     // 3. 添加 then_label 标记 then 块的开始，并翻译 then_block
     node->blockInsts.addInst(then_label);
-    // 翻译 then_block 时，我们使用普通的 ir_visit_ast_node，因为它不是一个条件上下文
-    ast_node * processed_then_node = ir_visit_ast_node(then_node);
-    if (!processed_then_node) {
-        minic_log(LOG_ERROR, "Failed to generate IR for if-then block at line %lld.", (long long) then_node->line_no);
-        // 标签可能已加入 InterCode，应由其管理，但如果这里要手动清理，需小心
-        // delete else_actual_label; (if created and not added)
-        // delete end_if_label; (if not added)
-        return false;
+    // 翻译 then_block
+    if (then_node) {
+        ast_node * processed_then_node = ir_visit_ast_node(then_node);
+        if (!processed_then_node) {
+            minic_log(LOG_ERROR,
+                      "Failed to generate IR for if-then block at line %lld.",
+                      (long long) then_node->line_no);
+            // 标签可能已加入 InterCode，应由其管理，但如果这里要手动清理，需小心
+            // delete else_actual_label; (if created and not added)
+            // delete end_if_label; (if not added)
+            return false;
+        }
+        node->blockInsts.addInst(processed_then_node->blockInsts);
     }
-    node->blockInsts.addInst(processed_then_node->blockInsts);
+
 
     // 4. 处理 else_block (如果存在)
     if (has_else) {
@@ -1645,9 +1650,9 @@ bool IRGenerator::ir_while(ast_node * node)
     }
 
     // AST结构: node->sons[0]=condition, node->sons[1]=block
-    if (node->sons.size() != 2) {
+    if (node->sons.empty()) {
         minic_log(LOG_ERROR,
-                  "Invalid while statement AST node: missing condition or block at line %lld.",
+                  "Invalid while statement AST node: missing condition at line %lld.",
                   (long long) (node ? node->line_no : -1));
         return false;
     }
