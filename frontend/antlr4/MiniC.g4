@@ -52,7 +52,7 @@ statement:
 	| lVal T_ASSIGN expr T_SEMICOLON	# assignStatement
 	| block								# blockStatement
 	| expr? T_SEMICOLON					# expressionStatement
-	| T_IF T_L_PAREN expr T_R_PAREN statement (T_ELSE statement)? # ifStatement // 新增：if语句
+	| T_IF T_L_PAREN expr T_R_PAREN statement? (T_ELSE statement)? # ifStatement // 新增：if语句
 	| T_WHILE T_L_PAREN expr T_R_PAREN statement # whileStatement // 新增：while语句
 	| T_BREAK T_SEMICOLON				# breakStatement
 	| T_CONTINUE T_SEMICOLON			# continueStatement;

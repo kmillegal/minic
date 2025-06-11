@@ -17,6 +17,7 @@
 
 #include "Type.h"
 #include "StorageSet.h"
+#include <cassert>
 
 ///
 /// @brief 指针类型
@@ -112,6 +113,7 @@ public:
     ///
     static const PointerType * get(const Type * pointee)
     {
+        assert(pointee != nullptr && "致命错误：尝试创建一个指向空类型的指针！");
         static StorageSet<PointerType, PointerTypeHasher, PointerTypeEqual> storageSet;
         return storageSet.get(pointee);
     }

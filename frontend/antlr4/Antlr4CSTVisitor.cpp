@@ -245,12 +245,16 @@ std::any MiniCCSTVisitor::visitBlockItem(MiniCParser::BlockItemContext * ctx)
 /// @param ctx CST上下文
 std::any MiniCCSTVisitor::visitStatement(MiniCParser::StatementContext * ctx)
 {
-    // 识别的文法产生式：statement: T_ID T_ASSIGN expr T_SEMICOLON  # assignStatement
-    // | T_RETURN expr T_SEMICOLON # returnStatement
-    // | block  # blockStatement
-    // | expr ? T_SEMICOLON #expressionStatement;
-    // | T_IF T_L_PAREN expr T_R_PAREN statement (T_ELSE statement)? # ifStatement
-    // | T_WHILE T_L_PAREN expr T_R_PAREN statement # whileStatement;
+    // 识别的文法产生式：
+    // statement:
+    // T_RETURN expr T_SEMICOLON #returnStatement
+    // | lVal T_ASSIGN expr T_SEMICOLON #assignStatement
+    // | block #blockStatement
+    // | expr? T_SEMICOLON #expressionStatement
+    // | T_IF T_L_PAREN expr T_R_PAREN(statement)? (T_ELSE statement)? #ifStatement
+    // | T_WHILE T_L_PAREN expr T_R_PAREN statement #whileStatement
+    // | T_BREAK T_SEMICOLON #breakStatement
+    // | T_CONTINUE T_SEMICOLON #continueStatement;
     if (Instanceof(assignCtx, MiniCParser::AssignStatementContext *, ctx)) {
         return visitAssignStatement(assignCtx);
     } else if (Instanceof(returnCtx, MiniCParser::ReturnStatementContext *, ctx)) {
@@ -313,13 +317,17 @@ std::any MiniCCSTVisitor::visitBlockStatement(MiniCParser::BlockStatementContext
 /// @param ctx CST上下文
 std::any MiniCCSTVisitor::visitIfStatement(MiniCParser::IfStatementContext * ctx)
 {
-    // 识别的文法产生式：ifStatement : T_IF T_L_PAREN expr T_R_PAREN statement (T_ELSE statement)?;
+    // 识别的文法产生式：ifStatement : T_IF T_L_PAREN expr T_R_PAREN statement? (T_ELSE statement)?;
 
     // 非终结符，表达式expr遍历
     auto exprNode = std::any_cast<ast_node *>(visitExpr(ctx->expr()));
 
+    ast_node * ifBlockNode = nullptr;
     // 遍历if语句块
-    auto ifBlockNode = std::any_cast<ast_node *>(visitStatement(ctx->statement(0)));
+    if (!ctx->statement().empty())
+    {
+        ifBlockNode = std::any_cast<ast_node *>(visitStatement(ctx->statement(0)));
+    }
 
     ast_node * elseBlockNode = nullptr;
 
@@ -834,24 +842,27 @@ std::any MiniCCSTVisitor::visitArrayParamDimensions(MiniCParser::ArrayParamDimen
     // 识别的文法产生式(T_L_BRACKET expr? T_R_BRACKET) (T_L_BRACKET expr T_R_BRACKET)*;
     // 创建一个数组维度节点
     ast_node * arrayParamDimensionsNode = create_contain_node(ast_operator_type::AST_OP_ARRAY_INDEX);
+    size_t total_dimensions = ctx->T_L_BRACKET().size();
+    auto expr_contexts = ctx->expr();
     // 遍历每个维度
-    if (ctx->expr().empty()) {
-		// 没有维度表达式，直接返回空的数组维度节点
-		return arrayParamDimensionsNode;
+    if (total_dimensions > expr_contexts.size()) {
+        // 创建一个代表整数 0 的AST节点
+        digit_int_attr zero_attr;
+        zero_attr.val = 0;
+        zero_attr.lineno = (int64_t) ctx->getStart()->getLine();
+
+        ast_node * zero_dim_node = ast_node::New(zero_attr);
+        // 将这个 "0" 节点作为第一个维度插入
+        (void) arrayParamDimensionsNode->insert_son_node(zero_dim_node);
     }
-    else if (ctx->expr().size() == 1) {
-		// 只有一个维度表达式
-		auto dimNode = std::any_cast<ast_node *>(visitExpr(ctx->expr()[0]));
-		(void) arrayParamDimensionsNode->insert_son_node(dimNode);
-	} else {
-		// 有多个维度表达式
-		for (auto & dimCtx: ctx->expr()) {
+    
+        // 有多个维度表达式
+	for (auto & dimCtx: ctx->expr()) {
 			auto dimNode = std::any_cast<ast_node *>(visitExpr(dimCtx));
 			(void) arrayParamDimensionsNode->insert_son_node(dimNode);
 		}
-	}
 
-	return arrayParamDimensionsNode;
+    return arrayParamDimensionsNode;
 }
 std::any MiniCCSTVisitor::visitBasicType(MiniCParser::BasicTypeContext * ctx)
 {

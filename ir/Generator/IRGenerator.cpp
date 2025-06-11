@@ -419,20 +419,34 @@ bool IRGenerator::ir_function_formal_param(ast_node * node)
     std::string param_name;
     ast_node * id_ast_node; // 指向代表参数名的那个叶子节点
 
-    Type * original_type = type_ast_node->type;
+    Type * base_type = type_ast_node->type;
     Type * effective_param_type = nullptr;
-    if (declaration_node->node_type == ast_operator_type::AST_OP_ARRAY_DECL) {
+    if (declaration_node->node_type == ast_operator_type::AST_OP_ARRAY_DECL)
+        {
         // 参数是数组
+
+        // 提取名字和维度信息节点
         id_ast_node = declaration_node->sons[0];
         param_name = id_ast_node->name;
+        ast_node * dimensions_node = declaration_node->sons[1];
 
-        // 创建一个新的、最外层维度为0的 ArrayType 来表示指针
-        effective_param_type = new ArrayType(original_type, 0);
+        Type * final_type = base_type;
+
+        // 从内到外包裹类型，所以反向遍历维度列表
+        for (auto it = dimensions_node->sons.rbegin(); it != dimensions_node->sons.rend(); ++it) {
+            ast_node * dim_expr_node = *it;
+            uint64_t dim_size = dim_expr_node->integer_val;
+
+            final_type = new ArrayType(final_type, dim_size);
+        }
+
+        effective_param_type = final_type;
+
     } else {
         // 参数是普通变量
         id_ast_node = declaration_node;
         param_name = id_ast_node->name;
-        effective_param_type = original_type;
+        effective_param_type = base_type;
     }
 
     // 创建 FormalParam 对象。这个对象代表了参数传递的接口。
@@ -501,17 +515,39 @@ bool IRGenerator::ir_function_call(ast_node * node)
         if (argsCount > currentFunc->getMaxFuncCallArgCnt()) {
             currentFunc->setMaxFuncCallArgCnt(argsCount);
         }
-
+        auto & formal_params = calledFunction->getParams();
         // 遍历参数列表，孩子是表达式
         // 这里自左往右计算表达式
-        for (auto son: paramsNode->sons) {
-
-            // 遍历Block的每个语句，进行显示或者运算
-            ast_node * temp = ir_visit_ast_node(son);
-            if (!temp) {
-                return false;
+        for (size_t i = 0; i < paramsNode->sons.size(); ++i) {
+            ast_node * son = paramsNode->sons[i];
+            ast_node * temp= son;
+            const Type * formal_type = formal_params[i]->getType();
+            if (son->node_type == ast_operator_type::AST_OP_ARRAY_ACCESS) {
+                if (formal_type->isArrayType()) {
+                    bool success = ir_array_declare(temp);
+                    if (!success) {
+                        return false;
+                    }
+                } else {
+                    temp = ir_visit_ast_node(son);
+                    if (!temp) {
+                        return false;
+                    }
+                }
             }
+            else
+            {
+                temp = ir_visit_ast_node(son);
+                if (!temp) {
+                    return false;
+                }
 
+            }
+            // 遍历Block的每个语句，进行显示或者运算
+            // ast_node * temp = ir_visit_ast_node(son);
+            // if (!temp) {
+            //     return false;
+            // }
             realParams.push_back(temp->val);
             node->blockInsts.addInst(temp->blockInsts);
         }
@@ -1419,25 +1455,8 @@ bool IRGenerator::ir_assign(ast_node * node)
 
         return false;
     }
-    // TODO 左值判断是否是数组，是的话调用ir_array_assign，不调用ir_visit_ast_node
-    // Value * rhs_val = right->val;
+    // 左值判断是否是数组，是的话调用ir_array_assign，不调用ir_visit_ast_node
 
-    // Instruction * load_inst = nullptr; // 用于保存可能创建的LOAD指令
-
-    // if (rhs_val->getType()->isPointerType())
-    // {
-
-    //     // 创建一个新的临时变量来存放加载出来的值
-	// 	const Type * rhs_type = rhs_val->getType();
-    //     const PointerType * rhs_ptr_type = static_cast<const PointerType *>(rhs_type);
-    //     const Type * pointee_type = rhs_ptr_type->getPointeeType();
-    //     Value * temp_val = new Value(const_cast<Type *>(pointee_type));
-
-    //     // 创建 LOAD 指令
-	// 	load_inst = new MoveInstruction(module->getCurrentFunction(), temp_val, rhs_val);
-
-    //     rhs_val = temp_val;
-    // }
     ast_node * left = son1_node;
     //左值为数组,无LOAD指令
     if (son1_node->node_type == ast_operator_type::AST_OP_ARRAY_ACCESS)
@@ -1460,11 +1479,6 @@ bool IRGenerator::ir_assign(ast_node * node)
     // 创建临时变量保存IR的值，以及线性IR指令
     node->blockInsts.addInst(right->blockInsts);
 	node->blockInsts.addInst(left->blockInsts);
-	// if (load_inst)
-    // {
-    //     node->blockInsts.addInst(load_inst);
-
-    // }
 	node->blockInsts.addInst(movInst);
     // 这里假定赋值的类型是一致的
     node->val = movInst;
@@ -1857,125 +1871,6 @@ bool IRGenerator::ir_variable_declare(ast_node * node)
 
     return true;
 }
-// bool IRGenerator::ir_array_declare(ast_node * node)
-
-// {
-
-// 	ast_node * array_name_node = node->sons[0];
-
-// 	ast_node * index_node = node->sons[1];
-
-// 	Value * base_addr_val = module->findVarValue(array_name_node->name);
-
-// 	// 从基地址指针获取数组类型
-
-// 	const Type * base_type = base_addr_val->getType();
-
-// 	const Type * type_iterator = base_type;
-
-// 	// 翻译所有下标表达式
-
-// 	std::vector<Value *> index_vals;
-
-// 	for (ast_node * index_expr_ast: index_node->sons)
-//     {
-// 		ast_node * translated_index_node = ir_visit_ast_node(index_expr_ast);
-
-//         if (!translated_index_node)
-// 			return false;
-
-//         node->blockInsts.addInst(translated_index_node->blockInsts);
-//         index_vals.push_back(translated_index_node->val);
-//     }
-
-// // 迭代计算元素偏移量
-
-// 	Value * element_offset = index_vals[0]; // 元素偏移量累加器
-
-//     const ArrayType * firstArrayTy = static_cast<const ArrayType *>(type_iterator);
-
-//     type_iterator = firstArrayTy->getElementType();
-
-//     for (size_t i = 1; i < index_vals.size(); ++i)
-//     {
-
-//         Value * current_index_val = index_vals[i];
-
-//         const ArrayType * currentArrayTy = static_cast<const ArrayType *>(type_iterator);
-
-//         Value * dim_size_val = new ConstInt(currentArrayTy->getNumElements());
-
-//         element_offset = new BinaryInstruction(module->getCurrentFunction(),
-
-// 													IRInstOperator::IRINST_OP_MUL_I,
-
-// 												element_offset,
-
-// 													dim_size_val,
-
-// 														IntegerType::getTypeInt());
-
-//         node->blockInsts.addInst(static_cast<Instruction *>(element_offset));
-
-//         // running_offset = running_offset + idxi (idxi 是当前维度的下标值)
-
-// 		element_offset = new BinaryInstruction(module->getCurrentFunction(),
-
-// IRInstOperator::IRINST_OP_ADD_I,
-
-// element_offset,
-
-// current_index_val,
-
-// IntegerType::getTypeInt());
-
-//         node->blockInsts.addInst(static_cast<Instruction *>(element_offset));
-
-//         // 更新类型迭代器，为下一次循环做准备
-
-// type_iterator = currentArrayTy->getElementType();
-
-
-//     }
-
-//     // 计算最终的字节偏移量
-
-// 	int32_t element_size = type_iterator->getSize();
-
-//    Value * element_size_val = new ConstInt(element_size);
-
-//     Value * byte_offset = new BinaryInstruction(module->getCurrentFunction(),
-
-//  IRInstOperator::IRINST_OP_MUL_I,
-
-// element_offset,
-
-//  element_size_val,
-
-// IntegerType::getTypeInt());
-
-//      node->blockInsts.addInst(static_cast<Instruction *>(byte_offset));
-
-//     // 计算最终地址 = 基地址 + 字节偏移量
-
-// 	const Type * final_address_type = PointerType::get(type_iterator);
-
-// 	Value * final_address = new BinaryInstruction(module->getCurrentFunction(),
-
-// 													IRInstOperator::IRINST_OP_ADD_I,
-
-// 													base_addr_val,
-
-// 													byte_offset,
-
-// 													const_cast<Type *>(final_address_type));
-
-//     node->blockInsts.addInst(static_cast<Instruction *>(final_address));
-
-//     node->val = final_address;
-
-//     return true;
-// }
 
 /// @brief 数组元素声明节点翻译成线性中间IR
 /// @param node AST节点
@@ -1992,7 +1887,7 @@ bool IRGenerator::ir_array_declare(ast_node * node)
 
     if (base_type->isArrayType() && static_cast<const ArrayType *>(base_type)->getNumElements() == 0) {
         // 函数参数
-        type_iterator = static_cast<const ArrayType *>(base_type)->getElementType();
+        type_iterator = base_type;
     } else {
         // 局部/全局数组
         type_iterator = base_type;
@@ -2014,7 +1909,10 @@ bool IRGenerator::ir_array_declare(ast_node * node)
         // 错误：数组访问必须有下标
         return false;
     }
-
+    // if (!index_vals.empty() && type_iterator->isArrayType()) {
+    //     type_iterator = static_cast<const ArrayType *>(type_iterator)->getElementType();
+    // }
+    // TODO int array[20][100] 乘数组大小 用的20，而不是100
     // 偏移量从第一个下标开始
     element_offset = index_vals[0];
     if (type_iterator->isArrayType()) {
@@ -2044,7 +1942,15 @@ bool IRGenerator::ir_array_declare(ast_node * node)
         // 更新类型迭代器，为下一次循环做准备
         type_iterator = currentArrayTy->getElementType();
     }
+    // if (type_iterator->isArrayType()) {
+    //     type_iterator = static_cast<const ArrayType *>(type_iterator)->getElementType();
+    // }
 
+    // ✅ 关键：在整个循环结束后，type_iterator 指向的是最后一维访问的元素类型。
+    // 我们还需要最后再推进一次，来获得最终的基础元素类型。
+    // if (!index_vals.empty() && type_iterator->isArrayType()) {
+    //     type_iterator = static_cast<const ArrayType *>(type_iterator)->getElementType();
+    // }
     // 计算最终的字节偏移量
     int32_t element_size = type_iterator->getSize();
     Value * element_size_val = new ConstInt(element_size);

@@ -21,6 +21,7 @@
 #include "Function.h"
 #include "LocalVariable.h"
 #include "MoveInstruction.h"
+#include "PointerType.h"
 
 
 /// @brief 指定函数名字、函数类型的构造函数
@@ -164,9 +165,47 @@ void Function::toString(std::string & str)
     for (auto & inst: code.getInsts()) {
 
         if (inst->hasResultValue()) {
+            Type * varType = inst->getType();
+            if (varType->isArrayType()) {
+                str += "\tdeclare ";
+				Type * currentType = varType;
+				std::vector<uint64_t> dims;
 
-            // 局部变量和临时变量需要输出declare语句
-            str += "\tdeclare " + inst->getType()->toString() + " " + inst->getIRName() + "\n";
+				// 递归解析，分离出基础类型和所有维度
+				while (currentType->isArrayType()) {
+					ArrayType * arrayTy = static_cast<ArrayType *>(currentType);
+					dims.push_back(arrayTy->getNumElements());
+					currentType = arrayTy->getElementType();
+				}
+
+				str += currentType->toString(); // 基础类型
+				str += " " + inst->getIRName();  // IR中的名字
+				for (uint64_t dim: dims) {
+					str += "[" + std::to_string(dim) + "]"; // 维度
+                }
+                str += "\n";
+            } else if (varType->isPointerType()) {
+                const Type * pointee_type = static_cast<PointerType *>(varType)->getPointeeType();
+
+                if (pointee_type->isArrayType()) {
+
+                    std::string dims_str = "";
+                    const Type * base_type = pointee_type;
+                    // TODO
+                    while (base_type->isArrayType()) {
+                        const ArrayType * at = static_cast<const ArrayType *>(base_type);
+                        dims_str += "[" + std::to_string(at->getNumElements()) + "]";
+                        base_type = at->getElementType();
+                    }
+
+                    str += "\tdeclare " + base_type->toString() + " " + inst->getIRName() + dims_str + "\n";
+                }else {
+                    str += "\tdeclare " + inst->getType()->toString() + " " + inst->getIRName() + "\n";
+                }
+            } else {
+                // 局部变量和临时变量需要输出declare语句
+                str += "\tdeclare " + inst->getType()->toString() + " " + inst->getIRName() + "\n";
+            }
         }
     }
 

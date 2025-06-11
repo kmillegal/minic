@@ -17,6 +17,7 @@
 #include "Function.h"
 #include "Common.h"
 #include "Type.h"
+#include "PointerType.h"
 
 /// @brief 含有参数的函数调用
 /// @param srcVal 函数的实参Value
@@ -85,6 +86,24 @@ void FuncCallInstruction::toString(std::string & str)
                 str += " " + operand->getIRName();  // IR中的名字
                 for (uint64_t dim: dims) {
                     str += "[" + std::to_string(dim) + "]"; // 维度
+                }
+            } else if (varType->isPointerType()) {
+                const Type * pointee_type = static_cast<PointerType *>(varType)->getPointeeType();
+
+                if (pointee_type->isArrayType()) {
+
+                    std::string dims_str = "";
+                    const Type * base_type = pointee_type;
+					//TODO
+                    while (base_type->isArrayType()) {
+                        const ArrayType * at = static_cast<const ArrayType *>(base_type);
+                        dims_str += "[" + std::to_string(at->getNumElements()) + "]";
+                        base_type = at->getElementType();
+                    }
+
+                    str += base_type->toString() + " " + operand->getIRName() + dims_str;
+                } else {
+                    str += operand->getType()->toString() + " " + operand->getIRName();
                 }
             } else {
                 str += operand->getType()->toString() + " " + operand->getIRName();
