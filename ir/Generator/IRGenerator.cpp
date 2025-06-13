@@ -22,7 +22,9 @@
 
 #include "AST.h"
 #include "ArrayType.h"
+#include "ConstInt.h"
 #include "IntegerType.h"
+#include "LocalVariable.h"
 #include "PointerType.h"
 #include "Common.h"
 #include "Function.h"
@@ -1968,12 +1970,12 @@ bool IRGenerator::ir_array_declare(ast_node * node)
 
     // 计算最终地址 = 基地址 + 字节偏移量
     const Type * final_address_type = PointerType::get(type_iterator);
-    Value * final_address = new BinaryInstruction(module->getCurrentFunction(),
+    BinaryInstruction * final_address = new BinaryInstruction(module->getCurrentFunction(),
                                                   IRInstOperator::IRINST_OP_ADD_I,
                                                   base_addr_val,
                                                   byte_offset,
                                                   const_cast<Type *> (final_address_type));
-    node->blockInsts.addInst(static_cast<Instruction *>(final_address));
+    node->blockInsts.addInst(final_address);
 
     node->val = final_address;
 
@@ -1992,16 +1994,11 @@ bool IRGenerator::ir_array_access(ast_node * node)
     Function * currentFunc = module->getCurrentFunction();
     // 从上一步的结果中拿到地址指针
     Value * address_ptr = node->val;
-    // 创建一个新的临时变量来存放加载出来的值
-    const PointerType * rhs_ptr_type = static_cast<const PointerType *>(address_ptr->getType());
-    const Type * pointee_type = rhs_ptr_type->getPointeeType();
-    Value * loaded_val = new Value(const_cast<Type *>(pointee_type));
-
-    //  创建 LOAD 指令
-    Instruction * load_inst = new MoveInstruction(currentFunc, loaded_val, address_ptr);
+    // TODO 该方法待修改，不能直接new value
+    Instruction * load_inst = new MoveInstruction(currentFunc, address_ptr);
     node->blockInsts.addInst(load_inst);
 
-    node->val = loaded_val;
+    node->val = load_inst;
 
     return true;
 }

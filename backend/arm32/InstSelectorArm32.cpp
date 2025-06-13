@@ -63,7 +63,8 @@ InstSelectorArm32::InstSelectorArm32(vector<Instruction *> & _irCode,
     translator_handlers[IRInstOperator::IRINST_OP_LE_I] = &InstSelectorArm32::translate_cmp_int32;
     translator_handlers[IRInstOperator::IRINST_OP_GT_I] = &InstSelectorArm32::translate_cmp_int32;
     translator_handlers[IRInstOperator::IRINST_OP_GE_I] = &InstSelectorArm32::translate_cmp_int32;
-
+    translator_handlers[IRInstOperator::IRINST_OP_LOAD] = &InstSelectorArm32::translate_load_int32;
+    translator_handlers[IRInstOperator::IRINST_OP_STORE] = &InstSelectorArm32::translate_store_int32;
 
 
     translator_handlers[IRInstOperator::IRINST_OP_FUNC_CALL] = &InstSelectorArm32::translate_call;
@@ -506,7 +507,100 @@ std::string InstSelectorArm32::get_opposite_arm_condition_code(IRInstOperator ir
         iloc.store_var(result_target_reg_no, inst, ARM32_TMP_REG_NO);
         simpleRegisterAllocator.free(inst);                           // 释放为 inst 临时分配的寄存器
     }
+}
 
+/// @brief load指令翻译成ARM32汇编
+/// @param inst IR指令
+void InstSelectorArm32::translate_load_int32(Instruction * inst)
+{
+    // 操作数: op0 = dest (目标Value), op1 = addr_val (持有地址的Value)
+    Value * result = inst;
+    Value * dest = inst->getOperand(0);
+    Value * addr_val = inst->getOperand(1);
+
+    // --- 步骤 1: 为目标 dest 分配一个寄存器 ---
+    // LOAD指令的结果必须放入一个寄存器。
+    // 寄存器分配器会记录下来：dest 这个 Value 现在活在这个寄存器里。
+    int32_t dest_reg_no = simpleRegisterAllocator.Allocate(dest);
+    if (dest_reg_no == -1) {
+        minic_log(LOG_ERROR,
+                  "Translate LOAD: Failed to allocate register for destination %s.",
+                  dest->getName().c_str());
+        return;
+    }
+
+    // --- 步骤 2: 将地址加载到一个临时寄存器 (r_addr) ---
+    int32_t addr_reg_no = simpleRegisterAllocator.Allocate();
+    if (addr_reg_no == -1) {
+        minic_log(LOG_ERROR, "Translate LOAD: Failed to allocate register for address value.");
+        simpleRegisterAllocator.free(dest); // 清理已分配的资源
+        return;
+    }
+    iloc.load_var(addr_reg_no, addr_val);
+
+    // --- 步骤 3: 执行核心的 LDR 指令 ---
+    // 生成 LDR r_dest, [r_addr]
+    iloc.inst("ldr", PlatformArm32::regName[dest_reg_no], "[" + PlatformArm32::regName[addr_reg_no] + "]");
+
+    iloc.store_var(dest_reg_no, result, ARM32_TMP_REG_NO); // 将结果存储到 dest 的内存位置
+
+    // --- 步骤 4: 清理 ---
+    // 地址寄存器使命已完成，立即释放。
+    simpleRegisterAllocator.free(addr_reg_no);
+    simpleRegisterAllocator.free(dest_reg_no); // 释放 dest 寄存器
+}
+
+/// @brief store指令翻译成ARM32汇编
+/// @param inst IR指令
+void InstSelectorArm32::translate_store_int32(Instruction * inst)
+{
+    // 根据 MoveInstruction 的构造逻辑，STORE 操作的操作数是：
+    // op0 = addr_val (目标地址), op1 = src_val (要存储的源值)
+    Value * addr_val = inst->getOperand(0);
+    Value * src_val = inst->getOperand(1);
+
+    // --- 步骤 1: 将地址加载到寄存器 (r_addr) ---
+    // 我们需要一个临时寄存器来存放目标地址。
+    int32_t addr_reg_no = simpleRegisterAllocator.Allocate();
+    if (addr_reg_no == -1) {
+        minic_log(LOG_ERROR, "Translate STORE: Failed to allocate register for address value.");
+        return;
+    }
+    // 使用 iloc.load_var 将地址值加载到我们新分配的寄存器中。
+    iloc.load_var(addr_reg_no, addr_val);
+
+    // --- 步骤 2: 将源值加载到寄存器 (r_src) ---
+    // 我们需要一个寄存器来存放要写入内存的数据。
+    int32_t src_reg_no = src_val->getRegId();
+    bool src_is_temporary = false; // 标记我们是否为 src 临时分配了寄存器
+
+    if (src_reg_no == -1) {
+        // 如果源值不在寄存器中 (例如，它是一个常量或内存变量)，
+        // 我们需要为它临时分配一个寄存器并加载它的值。
+        src_reg_no = simpleRegisterAllocator.Allocate();
+        if (src_reg_no == -1) {
+            minic_log(LOG_ERROR,
+                      "Translate STORE: Failed to allocate register for source value %s.",
+                      src_val->getName().c_str());
+            simpleRegisterAllocator.free(addr_reg_no); // 清理已分配的资源
+            return;
+        }
+        iloc.load_var(src_reg_no, src_val);
+        src_is_temporary = true;
+    }
+    // 如果 src_val 本身就在寄存器里，我们直接使用它的 regId 即可。
+
+    // --- 步骤 3: 执行核心的 STR 指令 ---
+    // 生成 STR r_src, [r_addr]
+    iloc.inst("str", PlatformArm32::regName[src_reg_no], "[" + PlatformArm32::regName[addr_reg_no] + "]");
+
+    // --- 步骤 4: 清理 ---
+    // 释放所有为本次操作临时分配的寄存器。
+    simpleRegisterAllocator.free(addr_reg_no);
+
+    if (src_is_temporary) {
+        simpleRegisterAllocator.free(src_reg_no);
+    }
 }
 
 /// @brief 二元操作指令翻译成ARM32汇编
@@ -532,8 +626,13 @@ void InstSelectorArm32::translate_two_operator(Instruction * inst, string operat
         // 分配一个寄存器r8
         load_arg1_reg_no = simpleRegisterAllocator.Allocate(arg1);
 
-        // arg1 -> r8，这里可能由于偏移不满足指令的要求，需要额外分配寄存器
-        iloc.load_var(load_arg1_reg_no, arg1);
+        if (arg1->getType()->isArrayType() || arg1->getType()->isPointerType()) {
+            // 如果是数组或指针，加载地址
+            iloc.lea_var(load_arg1_reg_no, arg1);
+        } else {
+            // 否则加载值
+            iloc.load_var(load_arg1_reg_no, arg1);
+        }
     } else {
         load_arg1_reg_no = arg1_reg_no;
     }
@@ -543,9 +642,14 @@ void InstSelectorArm32::translate_two_operator(Instruction * inst, string operat
 
         // 分配一个寄存器r9
         load_arg2_reg_no = simpleRegisterAllocator.Allocate(arg2);
-
-        // arg2 -> r9
-        iloc.load_var(load_arg2_reg_no, arg2);
+        if (arg2->getType()->isArrayType() || arg2->getType()->isPointerType()) {
+            // 如果是数组或指针，加载地址
+            iloc.lea_var(load_arg2_reg_no, arg2);
+        } else {
+            // 否则加载值
+            iloc.load_var(load_arg2_reg_no, arg2);
+        }
+        // iloc.load_var(load_arg2_reg_no, arg2);
     } else {
         load_arg2_reg_no = arg2_reg_no;
     }

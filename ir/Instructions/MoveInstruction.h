@@ -37,6 +37,13 @@ public:
     ///
     MoveInstruction(Function * _func, Value * result, Value * srcVal1);
 
+    ///
+    /// @brief 构造函数
+	/// @brief 用于将地址值移动到寄存器中
+    /// @param _func 所属的函数
+    /// @param _srcAddr 源地址
+    ///
+    MoveInstruction(Function * _func, Value * _srcAddr);
     /// @brief 转换成字符串
     void toString(std::string & str) override;
 

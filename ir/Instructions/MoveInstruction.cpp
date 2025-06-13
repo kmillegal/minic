@@ -34,12 +34,22 @@ MoveInstruction::MoveInstruction(Function * _func, Value * _result, Value * _src
     if (_result->getType()->isPointerType()) {
         this->op = IRInstOperator::IRINST_OP_STORE;
 
-    } else if (_srcVal1->getType()->isPointerType()) {
-        this->op = IRInstOperator::IRINST_OP_LOAD;
-        Type * pointer_type = _srcVal1->getType();
-        PointerType * src_ptr_type = static_cast<PointerType *>(pointer_type);
-        this->type = const_cast<Type *>(src_ptr_type->getPointeeType());
     }
+}
+
+///
+/// @brief 构造函数 (专门用于LOAD指令)
+/// @param _func 所属的函数
+/// @param _srcAddr 要加载数据的源地址指针
+///
+MoveInstruction::MoveInstruction(Function * _func, Value * _srcAddr)
+    : Instruction(_func,
+                  IRInstOperator::IRINST_OP_LOAD,
+                  const_cast<Type *>(static_cast<PointerType *>(_srcAddr->getType())->getPointeeType()))
+{
+    addOperand(this);
+
+    addOperand(_srcAddr);
 }
 
 /// @brief 转换成字符串显示

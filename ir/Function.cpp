@@ -401,19 +401,7 @@ void Function::renameIR()
     for (auto inst: this->getInterCode().getInsts()) {
         if (inst->getOp() == IRInstOperator::IRINST_OP_LABEL) {
             inst->setIRName(IR_LABEL_PREFIX + std::to_string(labelIndex++));
-        } else if (inst->getOp() == IRInstOperator::IRINST_OP_LOAD) {
-
-            // 先给 LOAD 指令本身命名
-            inst->setIRName(IR_TEMP_VARNAME_PREFIX + std::to_string(nameIndex++));
-
-            // 拿到它内部的目标操作数 Value
-            MoveInstruction * move_inst = static_cast<MoveInstruction *>(inst);
-            Value * dest_val = move_inst->getOperand(0); 
-
-            // 把指令的名字也赋给这个内部的 Value
-            dest_val->setIRName(inst->getIRName());
-
-        } else if (inst->hasResultValue()) {
+        }else if (inst->hasResultValue()) {
             inst->setIRName(IR_TEMP_VARNAME_PREFIX + std::to_string(nameIndex++));
         }
     }

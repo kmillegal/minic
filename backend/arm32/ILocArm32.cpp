@@ -416,7 +416,10 @@ void ILocArm32::lea_var(int rs_reg_no, Value * var)
     // 被加载的变量肯定不是寄存器变量！
 
     // 目前只考虑局部变量
-
+    if (Instanceof(globalVar, GlobalVariable *, var)) {
+        // 全局变量
+        load_symbol(rs_reg_no, globalVar->getName());
+    }else{
     // 栈帧偏移
     int32_t var_baseRegId = -1;
     int64_t var_offset = -1;
@@ -428,6 +431,7 @@ void ILocArm32::lea_var(int rs_reg_no, Value * var)
 
     // lea r8, [fp,#-16]
     leaStack(rs_reg_no, var_baseRegId, var_offset);
+	}
 }
 
 /// @brief 保存寄存器到变量，保证将计算结果（r8）保存到变量
