@@ -302,11 +302,21 @@ void InstSelectorArm32::translate_assign(Instruction * inst)
         }
     } else {
         // 内存变量 => 内存变量
-
         int32_t temp_regno = simpleRegisterAllocator.Allocate();
-
+        if (arg1->getType()->isArrayType()) {
+        ArrayType * array_type = static_cast<ArrayType *>(arg1->getType());
+        if (array_type->getNumElements() == 0) {
+                iloc.load_var(temp_regno, arg1);
+            }else{
+                // 如果源是数组变量，我们需要加载它的【地址】到临时寄存器
+                iloc.lea_var(temp_regno, arg1);
+			}
+        } else {
+            // 对于其他所有情况，我们加载它的【值】到临时寄存器
+            iloc.load_var(temp_regno, arg1);
+        }
         // arg1 -> r8
-        iloc.load_var(temp_regno, arg1);
+        //iloc.load_var(temp_regno, arg1);
 
         // r8 -> rs 可能用到r9
         iloc.store_var(temp_regno, result, ARM32_TMP_REG_NO);

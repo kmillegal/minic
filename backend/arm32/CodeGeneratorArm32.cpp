@@ -244,9 +244,16 @@ void CodeGeneratorArm32::adjustFormalParamInsts(Function * func)
     for (int k = 4; k < (int) params.size(); k++) {
 
         params[k]->setMemoryAddr(ARM32_FP_REG_NO, fp_esp);
+        Type * param_type = params[k]->getType();
+        if (param_type->isArrayType()) {
+            // 如果是数组类型，它在栈上传递的是一个指针
+            fp_esp += 4;
+        } else {
+            // 增加4字节，目前只支持int类型
+            fp_esp += params[k]->getType()->getSize();
+        }
 
-        // 增加4字节，目前只支持int类型
-        fp_esp += params[k]->getType()->getSize();
+
     }
 }
 
