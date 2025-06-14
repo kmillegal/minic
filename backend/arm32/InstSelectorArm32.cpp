@@ -15,10 +15,12 @@
 ///
 #include <cstdio>
 
+#include "BinaryInstruction.h"
 #include "Common.h"
 #include "ILocArm32.h"
 #include "InstSelectorArm32.h"
 #include "Instruction.h"
+#include "IntegerType.h"
 #include "PlatformArm32.h"
 
 #include "PointerType.h"
@@ -30,6 +32,7 @@
 #include "FuncCallInstruction.h"
 #include "MoveInstruction.h"
 #include "BranchInstruction.h"
+#include "Type.h"
 
 /// @brief 构造函数
 /// @param _irCode 指令
@@ -290,8 +293,13 @@ void InstSelectorArm32::translate_assign(Instruction * inst)
         iloc.store_var(arg1_regId, result, ARM32_TMP_REG_NO);
     } else if (result_regId != -1) {
         // 内存变量 => 寄存器
-
-        iloc.load_var(result_regId, arg1);
+        if (arg1->getType()->isArrayType()) {
+            // 如果源操作数(src)的类型是数组，
+            // 那么我们就调用 lea_var 来加载它的【地址】。
+            iloc.lea_var(result_regId, arg1);
+        }else{
+            iloc.load_var(result_regId, arg1);
+        }
     } else {
         // 内存变量 => 内存变量
 
@@ -626,9 +634,16 @@ void InstSelectorArm32::translate_two_operator(Instruction * inst, string operat
         // 分配一个寄存器r8
         load_arg1_reg_no = simpleRegisterAllocator.Allocate(arg1);
 
-        if (arg1->getType()->isArrayType() || arg1->getType()->isPointerType()) {
-            // 如果是数组或指针，加载地址
-            iloc.lea_var(load_arg1_reg_no, arg1);
+        if (arg1->getType()->isArrayType()) {
+            ArrayType * array_type = static_cast<ArrayType *>(arg1->getType());
+            if (array_type->getNumElements() == 0) {
+                // 数组形参，加载值
+                iloc.load_var(load_arg1_reg_no, arg1);
+            } else {
+                // 如果是数组加载地址
+                iloc.lea_var(load_arg1_reg_no, arg1);
+            }
+
         } else {
             // 否则加载值
             iloc.load_var(load_arg1_reg_no, arg1);
@@ -642,14 +657,21 @@ void InstSelectorArm32::translate_two_operator(Instruction * inst, string operat
 
         // 分配一个寄存器r9
         load_arg2_reg_no = simpleRegisterAllocator.Allocate(arg2);
-        if (arg2->getType()->isArrayType() || arg2->getType()->isPointerType()) {
-            // 如果是数组或指针，加载地址
-            iloc.lea_var(load_arg2_reg_no, arg2);
-        } else {
-            // 否则加载值
+		if (arg2->getType()->isArrayType()) {
+            // 如果是数组
+            ArrayType * array_type = static_cast<ArrayType *>(arg1->getType());
+            if( array_type->getNumElements() == 0) {
+				// 数组形参，加载值
+				iloc.load_var(load_arg2_reg_no, arg2);
+			} else {
+				// 如果是数组加载地址
+                iloc.lea_var(load_arg2_reg_no, arg2);
+			}
+		} else {
+			// 否则加载值
             iloc.load_var(load_arg2_reg_no, arg2);
         }
-        // iloc.load_var(load_arg2_reg_no, arg2);
+
     } else {
         load_arg2_reg_no = arg2_reg_no;
     }
@@ -822,13 +844,34 @@ void InstSelectorArm32::translate_call(Instruction * inst)
             // 检查实参的类型是否是临时变量。
             // 如果是临时变量，该变量可更改为寄存器变量即可，或者设置寄存器号
             // 如果不是，则必须开辟一个寄存器变量，然后赋值即可
+            Value * targetReg = PlatformArm32::intRegVal[k];
 
-            Instruction * assignInst = new MoveInstruction(func, PlatformArm32::intRegVal[k], arg);
+            // 判断 arg 是需要传值还是传地址
 
-            // 翻译赋值指令
-            translate_assign(assignInst);
+			Type * argType = arg->getType();
+            if (argType->isArrayType() || argType->isPointerType()) {
+                // TODO
 
-            delete assignInst;
+                if (arg && arg->getMemoryAddr()) // 确保它是一个已分配地址的栈变量
+                {
+                    // ======================= 这是最终的实现 =======================
+
+                    // 1. 从 targetReg 对象中获取目标寄存器的【编号】
+                    //    这需要您的 Register 类（或其基类）有一个类似 getRegNo() 的方法
+                    int dest_reg_no = targetReg->getRegId();
+
+                    // 4. 用提取出的三个整数，调用您的 leaStack 函数
+                    iloc.lea_var(dest_reg_no, arg);
+
+                    // =================================================================
+                }
+            } else {
+                Instruction * assignInst = new MoveInstruction(func, PlatformArm32::intRegVal[k], arg);
+
+                // 翻译赋值指令
+                translate_assign(assignInst);
+                delete assignInst;
+            }
         }
     }
 

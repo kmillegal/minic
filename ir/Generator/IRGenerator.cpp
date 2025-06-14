@@ -468,7 +468,9 @@ bool IRGenerator::ir_function_formal_param(ast_node * node)
 
     // 创建一个赋值指令 (MoveInstruction)，用于将实际参数的值（存储在 formal_param_value 代表的槽中）
     // 拷贝到函数体内部使用的局部变量 (param_local_var) 上。
-    MoveInstruction * moveInst = new MoveInstruction(current_function, param_local_var, formal_param_value);
+    MoveInstruction * moveInst;
+
+    moveInst = new MoveInstruction(current_function, param_local_var, formal_param_value);
 
     // 将此 MoveInstruction 添加到当前函数的IR代码列表中。
     // 这应该在函数入口指令 (EntryInstruction) 之后，实际函数体代码之前。

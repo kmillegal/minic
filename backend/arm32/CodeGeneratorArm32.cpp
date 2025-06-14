@@ -390,22 +390,29 @@ void CodeGeneratorArm32::stackAlloc(Function * func)
 
             // 该变量没有分配寄存器
 
-            int32_t size = var->getType()->getSize();
+            int32_t size;
+            Type * var_type = var->getType();
+            if (var_type->isArrayType() && static_cast<ArrayType *>(var_type)->getNumElements() == 0) {
+                // 数组形参
+                size = 4;
+            } else {
+                size = var->getType()->getSize();
+            }
 
             // 32位ARM平台按照4字节的大小整数倍分配局部变量
-            size = (size + 3) & ~3;
+			size = (size + 3) & ~3;
 
-            // 累计当前作用域大小
-            sp_esp += size;
+			// 累计当前作用域大小
+			sp_esp += size;
 
-            // 这里要注意检查变量栈的偏移范围。一般采用机制寄存器+立即数方式间接寻址
-            // 若立即数满足要求，可采用基址寄存器+立即数变量的方式访问变量
-            // 否则，需要先把偏移量放到寄存器中，然后机制寄存器+偏移寄存器来寻址
-            // 之后需要对所有使用到该Value的指令在寄存器分配前要变换。
+			// 这里要注意检查变量栈的偏移范围。一般采用机制寄存器+立即数方式间接寻址
+			// 若立即数满足要求，可采用基址寄存器+立即数变量的方式访问变量
+			// 否则，需要先把偏移量放到寄存器中，然后机制寄存器+偏移寄存器来寻址
+			// 之后需要对所有使用到该Value的指令在寄存器分配前要变换。
 
-            // 局部变量偏移设置
-            var->setMemoryAddr(ARM32_FP_REG_NO, -sp_esp);
-        }
+			// 局部变量偏移设置
+			var->setMemoryAddr(ARM32_FP_REG_NO, -sp_esp);
+            }
     }
 
     // 遍历包含有值的指令，也就是临时变量
