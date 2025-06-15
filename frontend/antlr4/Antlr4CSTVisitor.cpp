@@ -282,10 +282,14 @@ std::any MiniCCSTVisitor::visitStatement(MiniCParser::StatementContext * ctx)
 ///
 std::any MiniCCSTVisitor::visitReturnStatement(MiniCParser::ReturnStatementContext * ctx)
 {
-    // 识别的文法产生式：returnStatement -> T_RETURN expr T_SEMICOLON
+    // 识别的文法产生式：returnStatement -> T_RETURN expr? T_SEMICOLON
 
     // 非终结符，表达式expr遍历
-    auto exprNode = std::any_cast<ast_node *>(visitExpr(ctx->expr()));
+    ast_node * exprNode = nullptr;
+    if(ctx->expr()) {
+		// 如果存在表达式，则遍历
+		exprNode = std::any_cast<ast_node *>(visitExpr(ctx->expr()));
+	}
 
     // 创建返回节点，其孩子为Expr
     return create_contain_node(ast_operator_type::AST_OP_RETURN, exprNode);
@@ -670,11 +674,18 @@ std::any MiniCCSTVisitor::visitUnaryExp(MiniCParser::UnaryExpContext * ctx)
 
         ast_node * operandNode = std::any_cast<ast_node *>(operandResult);
 
-        // 创建一个表示单目求负操作的 AST 节点
-        int64_t lineNo = (int64_t) ctx->T_SUB()->getSymbol()->getLine();
-        ast_node * unaryMinusNode = create_unary_minus_node(operandNode, lineNo);
+        if (operandNode != nullptr && operandNode->node_type == ast_operator_type::AST_OP_LEAF_LITERAL_UINT) {
 
-        return unaryMinusNode;
+            operandNode->integer_val = -(operandNode->integer_val);
+
+            return (std::any) operandNode;
+        } else {
+            // 创建一个表示单目求负操作的 AST 节点
+            int64_t lineNo = (int64_t) ctx->T_SUB()->getSymbol()->getLine();
+            ast_node * unaryMinusNode = create_unary_minus_node(operandNode, lineNo);
+
+            return unaryMinusNode;
+        }
     } else if (ctx->primaryExp()) {
         // 普通表达式
         return visitPrimaryExp(ctx->primaryExp());

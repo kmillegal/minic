@@ -16,9 +16,12 @@
 ///
 #pragma once
 
+#include "Constant.h"
 #include "GlobalValue.h"
 #include "IRConstant.h"
 #include "ArrayType.h"
+#include "ConstInt.h"
+#include <string>
 
 ///
 /// @brief 全局变量，寻址时通过符号名或变量名来寻址
@@ -31,7 +34,8 @@ public:
     /// @param _type 类型
     /// @param _name 名字
     ///
-    explicit GlobalVariable(Type * _type, std::string _name) : GlobalValue(_type, _name)
+    explicit GlobalVariable(Type * _type, std::string _name, ConstInt * _initializer = nullptr)
+        : GlobalValue(_type, _name), initializer(_initializer)
     {
         // 设置对齐大小
         setAlignment(4);
@@ -85,6 +89,37 @@ public:
     }
 
     ///
+    /// @brief 是否初始化
+    /// @return true
+    /// @return false
+    ///
+    [[nodiscard]] bool hasInitializer() const
+    {
+        return initializer != nullptr;
+    }
+
+    ///
+    /// @brief 获取初始值
+    /// @return 初始值
+    ///
+    [[nodiscard]] ConstInt * getInitializer() const
+    {
+        return initializer;
+    }
+
+    ///
+    /// @brief 对该全局变量初始化
+    /// @param ConstInt * val
+    ///
+    void setInitializer(ConstInt * val)
+	{
+		this->initializer = val;
+        // 设置不在BSS段
+        if (initializer->getVal() != 0)
+            this->inBSSSection = false;
+	}
+
+    ///
     /// @brief Declare指令IR显示
     /// @param str
     ///
@@ -112,8 +147,11 @@ public:
         } else {
             // 非数组类型
             str += varType->toString() + " " + getIRName();
+            if (hasInitializer()) {
+                str += " = " + std::to_string(initializer->getVal());
+            }
         }
-    }
+	}
 
 private:
     ///
@@ -125,4 +163,9 @@ private:
     /// @brief 默认全局变量在BSS段，没有初始化，或者即使初始化过，但都值都为0
     ///
     bool inBSSSection = true;
+
+    ///
+    /// @brief 初始化值
+    ///
+    ConstInt * initializer = nullptr;
 };

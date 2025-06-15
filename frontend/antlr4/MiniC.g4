@@ -48,7 +48,7 @@ arrayParamDimensions: (T_L_BRACKET expr? T_R_BRACKET) (T_L_BRACKET expr T_R_BRAC
 
 // 目前语句支持return和赋值语句
 statement:
-	T_RETURN expr T_SEMICOLON			# returnStatement
+	T_RETURN expr? T_SEMICOLON			# returnStatement
 	| lVal T_ASSIGN expr T_SEMICOLON	# assignStatement
 	| block								# blockStatement
 	| expr? T_SEMICOLON					# expressionStatement

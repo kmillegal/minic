@@ -15,9 +15,11 @@
 ///
 #include "Module.h"
 
+#include "ArrayType.h"
 #include "ScopeStack.h"
 #include "Common.h"
 #include "VoidType.h"
+#include "PointerType.h"
 
 Module::Module(std::string _name) : name(_name)
 {
@@ -31,6 +33,18 @@ Module::Module(std::string _name) : name(_name)
     (void) newFunction("putint", VoidType::getType(), {new FormalParam{IntegerType::getTypeInt(), ""}}, true);
     (void) newFunction("getint", IntegerType::getTypeInt(), {}, true);
     (void) newFunction("putch", VoidType::getType(), {new FormalParam{IntegerType::getTypeInt(), ""}}, true);
+	(void) newFunction("getch", IntegerType::getTypeInt(), {}, true);
+    (void) newFunction("getarray",
+                       IntegerType::getTypeInt(),
+                       {new FormalParam(new ArrayType(IntegerType::getTypeInt(),0), "a")},
+                       true);
+    (void) newFunction("putarray",
+                       VoidType::getType(),
+                       {
+                           new FormalParam(IntegerType::getTypeInt(), "n"),
+                           new FormalParam(new ArrayType(IntegerType::getTypeInt(), 0), "a")
+                       },
+                       true);
 }
 
 /// @brief 进入作用域，如进入函数体块、语句块等

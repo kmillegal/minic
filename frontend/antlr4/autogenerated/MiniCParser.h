@@ -352,8 +352,8 @@ public:
     ReturnStatementContext(StatementContext *ctx);
 
     antlr4::tree::TerminalNode *T_RETURN();
-    ExprContext *expr();
     antlr4::tree::TerminalNode *T_SEMICOLON();
+    ExprContext *expr();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };

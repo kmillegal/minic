@@ -23,6 +23,7 @@
 #include "AST.h"
 #include "ArrayType.h"
 #include "ConstInt.h"
+#include "GlobalVariable.h"
 #include "IntegerType.h"
 #include "LocalVariable.h"
 #include "PointerType.h"
@@ -1838,10 +1839,26 @@ bool IRGenerator::ir_variable_declare(ast_node * node)
         Value * var_ir_value;
         var_name = var_name_node->name;
 
+        if (module->getCurrentFunction() == nullptr) {
+            // 当前在全局作用域，处理全局变量初始化
+            ast_node * translated_init_val_node = ir_visit_ast_node(init_val_node_ast);
+            if (!translated_init_val_node) {
+                return false;
+            }
+
+            ConstInt * initializer = dynamic_cast<ConstInt *>(translated_init_val_node->val);
+
+            Value * glob_var = module->newVarValue(left_node->type, var_name);
+
+            GlobalVariable * global_var = dynamic_cast<GlobalVariable *>(glob_var);
+
+            global_var->setInitializer(initializer);
+            node->val = global_var;
+
+        }else{
         // 创建变量的IR Value
         var_ir_value = module->newVarValue(left_node->type, var_name);
         node->val = var_ir_value;
-
         // 翻译初始化表达式
         ast_node * translated_init_val_node = ir_visit_ast_node(init_val_node_ast);
         if (!translated_init_val_node) {
@@ -1856,6 +1873,7 @@ bool IRGenerator::ir_variable_declare(ast_node * node)
         MoveInstruction * movInst =
             new MoveInstruction(module->getCurrentFunction(), var_ir_value, translated_init_val_node->val);
         node->blockInsts.addInst(movInst);
+		}
     } else if (right_node->node_type == ast_operator_type::AST_OP_ARRAY_DECL) {
         ast_node * var_name_node = right_node->sons[0];
         ast_node * array_size_node = right_node->sons[1];
