@@ -1675,6 +1675,9 @@ bool IRGenerator::ir_while(ast_node * node)
         return false;
     }
 
+    LabelInstruction * old_loop_start_label = m_current_loop_start_label;
+    LabelInstruction * old_loop_end_label = m_current_loop_end_label;
+
     ast_node * cond_node = node->sons[0];
     ast_node * block_node = node->sons[1];
 
@@ -1687,37 +1690,51 @@ bool IRGenerator::ir_while(ast_node * node)
     node->blockInsts.addInst(loop_start_label);
     m_current_loop_start_label = loop_start_label; // 记录当前循环的开始标签
     m_current_loop_end_label = loop_end_label;     // 记录当前循环的结束标签
+    if (cond_node->node_type == ast_operator_type::AST_OP_LEAF_LITERAL_UINT) {
+        // 条件恒为真，直接跳转到循环体
+        node->blockInsts.addInst(new GotoInstruction(currentFunc, loop_body_label));
 
-    // 3. 翻译条件表达式 (cond_node)，并传递真/假出口标签
-    if (!ir_visit_for_condition(cond_node, loop_body_label, loop_end_label)) {
-        minic_log(LOG_ERROR, "Failed to generate IR for while-condition at line %lld.", (long long) cond_node->line_no);
-        delete loop_start_label;
-        delete loop_body_label;
-        delete loop_end_label;
-        return false;
+    } else {
+        // 3. 翻译条件表达式 (cond_node)，并传递真/假出口标签
+        if (!ir_visit_for_condition(cond_node, loop_body_label, loop_end_label)) {
+            minic_log(LOG_ERROR,
+                      "Failed to generate IR for while-condition at line %lld.",
+                      (long long) cond_node->line_no);
+            delete loop_start_label;
+            delete loop_body_label;
+            delete loop_end_label;
+            m_current_loop_start_label = old_loop_start_label;
+            m_current_loop_end_label = old_loop_end_label;
+            return false;
+        }
+        // 将条件表达式生成的所有指令添加到 while 语句节点的指令列表中。
+        node->blockInsts.addInst(cond_node->blockInsts);
     }
-    // 将条件表达式生成的所有指令添加到 while 语句节点的指令列表中。
-    node->blockInsts.addInst(cond_node->blockInsts);
-
-    // 4. 添加循环体标签，并翻译循环体块
-    node->blockInsts.addInst(loop_body_label);
-    ast_node * processed_block_node = ir_visit_ast_node(block_node);
-    if (!processed_block_node) {
-        minic_log(LOG_ERROR, "Failed to generate IR for while-block at line %lld.", (long long) block_node->line_no);
-        delete loop_start_label;
-        delete loop_body_label;
-        delete loop_end_label;
-        return false;
+        // 4. 添加循环体标签，并翻译循环体块
+        node->blockInsts.addInst(loop_body_label);
+        ast_node * processed_block_node = ir_visit_ast_node(block_node);
+        if (!processed_block_node) {
+            minic_log(LOG_ERROR,
+                      "Failed to generate IR for while-block at line %lld.",
+                      (long long) block_node->line_no);
+            delete loop_start_label;
+            delete loop_body_label;
+            delete loop_end_label;
+            m_current_loop_start_label = old_loop_start_label;
+            m_current_loop_end_label = old_loop_end_label;
+            return false;
+        }
+        node->blockInsts.addInst(processed_block_node->blockInsts);
+        // 5. 添加跳转到循环开始标签的指令
+        node->blockInsts.addInst(new GotoInstruction(currentFunc, loop_start_label));
+        // 6. 添加循环结束标签
+        node->blockInsts.addInst(loop_end_label);
+        // 7. while 语句本身不产生值
+        node->val = nullptr;
+        m_current_loop_start_label = old_loop_start_label;
+        m_current_loop_end_label = old_loop_end_label;
+        return true;
     }
-    node->blockInsts.addInst(processed_block_node->blockInsts);
-    // 5. 添加跳转到循环开始标签的指令
-    node->blockInsts.addInst(new GotoInstruction(currentFunc, loop_start_label));
-    // 6. 添加循环结束标签
-    node->blockInsts.addInst(loop_end_label);
-    // 7. while 语句本身不产生值
-    node->val = nullptr;
-    return true;
-}
 
 /// @brief break节点翻译成线性中间IR
 /// @param node AST节点

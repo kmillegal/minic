@@ -238,7 +238,7 @@ std::any MiniCCSTVisitor::visitBlockItem(MiniCParser::BlockItemContext * ctx)
         return visitVarDecl(ctx->varDecl());
     }
 
-    return nullptr;
+    return static_cast<ast_node *> (nullptr);
 }
 
 /// @brief 非终结运算符statement中的遍历
@@ -271,9 +271,10 @@ std::any MiniCCSTVisitor::visitStatement(MiniCParser::StatementContext * ctx)
 		return visitBreakStatement(exprCtx);
     } else if (Instanceof(exprCtx, MiniCParser::ContinueStatementContext *, ctx)) {
 		return visitContinueStatement(exprCtx);
-	}
+    } else {
+        return static_cast<ast_node *>(nullptr);
+        }
 
-    return nullptr;
 }
 
 ///
@@ -919,8 +920,7 @@ std::any MiniCCSTVisitor::visitExpressionStatement(MiniCParser::ExpressionStatem
         return visitExpr(ctx->expr());
     } else {
         // 空语句
-
         // 直接返回空指针，需要再把语句加入到语句块时要注意判断，空语句不要加入
-        return nullptr;
+        return static_cast<ast_node *>(nullptr);
     }
 }
