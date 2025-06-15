@@ -19,6 +19,7 @@
 #include <vector>
 #include <iostream>
 
+#include "ConstInt.h"
 #include "Function.h"
 #include "Module.h"
 #include "PlatformArm32.h"
@@ -66,14 +67,18 @@ void CodeGeneratorArm32::genDataSection()
             // 在BSS段的全局变量，可以包含初值全是0的变量
             fprintf(fp, ".comm %s, %d, %d\n", var->getName().c_str(), var->getType()->getSize(), var->getAlignment());
         } else {
-
+            int size = var->getType()->getSize();
+            ConstInt * initial_value = var->getInitializer();
             // 有初值的全局变量
             fprintf(fp, ".global %s\n", var->getName().c_str());
             fprintf(fp, ".data\n");
             fprintf(fp, ".align %d\n", var->getAlignment());
             fprintf(fp, ".type %s, %%object\n", var->getName().c_str());
-            fprintf(fp, "%s\n", var->getName().c_str());
+
             // TODO 后面设置初始化的值，具体请参考ARM的汇编
+            fprintf(fp, ".size %s, %d\n", var->getName().c_str(), size);
+            fprintf(fp, "%s:\n", var->getName().c_str());
+            fprintf(fp, ".word %d\n", initial_value->getVal());
         }
     }
 }

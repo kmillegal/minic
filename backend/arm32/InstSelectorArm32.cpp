@@ -295,8 +295,13 @@ void InstSelectorArm32::translate_assign(Instruction * inst)
         // 内存变量 => 寄存器
         if (arg1->getType()->isArrayType()) {
             // 如果源操作数(src)的类型是数组，
-            // 那么我们就调用 lea_var 来加载它的【地址】。
-            iloc.lea_var(result_regId, arg1);
+            ArrayType * array_type = static_cast<ArrayType *>(arg1->getType());
+            if (array_type->getNumElements() == 0) {
+                iloc.load_var(result_regId, arg1);
+            } else {
+                // 如果源是数组变量，我们需要加载它的【地址】到临时寄存器
+                iloc.lea_var(result_regId, arg1);
+            }
         }else{
             iloc.load_var(result_regId, arg1);
         }
