@@ -250,6 +250,7 @@ protected:
     /// @return 翻译是否成功，true：成功，false：失败
     bool ir_visit_for_condition(ast_node * cond_node, LabelInstruction * true_target, LabelInstruction * false_target);
 
+    Value *promote_bool_to_int(ast_node * node,Value * bool_val);
 private:
     /// @brief 抽象语法树的根
     ast_node * root;

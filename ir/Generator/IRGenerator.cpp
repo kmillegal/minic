@@ -618,31 +618,48 @@ bool IRGenerator::ir_add(ast_node * node)
     ast_node * src2_node = node->sons[1];
 
     // 加法节点，左结合，先计算左节点，后计算右节点
-
+    // 保存并清空当前的真/假目标，强制子节点进行“值”计算
+    LabelInstruction * original_true_target = m_current_true_target;
+    LabelInstruction * original_false_target = m_current_false_target;
+    m_current_true_target = nullptr;
+    m_current_false_target = nullptr;
     // 加法的左边操作数
     ast_node * left = ir_visit_ast_node(src1_node);
     if (!left) {
         // 某个变量没有定值
+        m_current_true_target = original_true_target;
+        m_current_false_target = original_false_target;
         return false;
     }
-
+    node->blockInsts.addInst(left->blockInsts);
+    Value * left_val = nullptr;
+    if (left->val->getType() == IntegerType::getTypeBool())
+    {
+        left_val = promote_bool_to_int(node, left->val);
+    } else {
+        left_val = left->val;
+	}
     // 加法的右边操作数
     ast_node * right = ir_visit_ast_node(src2_node);
     if (!right) {
         // 某个变量没有定值
+        m_current_true_target = original_true_target;
+        m_current_false_target = original_false_target;
         return false;
     }
 
+    m_current_true_target = original_true_target;
+    m_current_false_target = original_false_target;
     // 这里只处理整型的数据，如需支持实数，则需要针对类型进行处理
 
     BinaryInstruction * addInst = new BinaryInstruction(module->getCurrentFunction(),
                                                         IRInstOperator::IRINST_OP_ADD_I,
-                                                        left->val,
+                                                        left_val,
                                                         right->val,
                                                         IntegerType::getTypeInt());
 
     // 创建临时变量保存IR的值，以及线性IR指令
-    node->blockInsts.addInst(left->blockInsts);
+    
     node->blockInsts.addInst(right->blockInsts);
     node->blockInsts.addInst(addInst);
 
@@ -1393,7 +1410,7 @@ bool IRGenerator::ir_not(ast_node * node)
 
     ast_node * operand_A_node = node->sons[0];
 
-
+	// 传递真假出口
     if (m_current_true_target && m_current_false_target) {
         LabelInstruction * original_true_target = m_current_true_target;
         LabelInstruction * original_false_target = m_current_false_target;
@@ -1542,10 +1559,6 @@ bool IRGenerator::ir_return(ast_node * node)
 bool IRGenerator::ir_if(ast_node * node)
 {
     Function * currentFunc = module->getCurrentFunction();
-    if (!currentFunc) {
-        minic_log(LOG_ERROR, "IRGenerator::ir_if called outside of a function context.");
-        return false;
-    }
 
     // AST结构: node->sons[0]=condition, node->sons[1]=then_block, node->sons[2]=else_block (optional)
     if (node->sons.empty()) {
@@ -1566,17 +1579,17 @@ bool IRGenerator::ir_if(ast_node * node)
 
     // 1. 创建需要的标签
     LabelInstruction * then_label = new LabelInstruction(currentFunc); // 真出口 (then 块的开始)
-    LabelInstruction * else_actual_label = nullptr;                    // 假出口 (else 块的开始, 如果有 else)
+    LabelInstruction * else_label = nullptr;                    // 假出口 (else 块的开始, 如果有 else)
     LabelInstruction * end_if_label = new LabelInstruction(currentFunc); // if 语句结束后的汇合点
 
     if (has_else) {
-        else_actual_label = new LabelInstruction(currentFunc);
+        else_label = new LabelInstruction(currentFunc);
     }
 
     // 确定条件为假时的跳转目标：
     // - 如果有 else 块，则跳转到 else_actual_label
     // - 如果没有 else 块，则直接跳转到 end_if_label (跳过 then 块)
-    LabelInstruction * false_target_for_condition = has_else ? else_actual_label : end_if_label;
+    LabelInstruction * false_target_for_condition = has_else ? else_label : end_if_label;
 
     // 2. 翻译条件表达式 (cond_node)，并传递真/假出口标签
     //    ir_visit_for_condition 会负责让 cond_node 生成跳转到 then_label (如果为真)
@@ -1585,7 +1598,7 @@ bool IRGenerator::ir_if(ast_node * node)
         minic_log(LOG_ERROR, "Failed to generate IR for if-condition at line %lld.", (long long) cond_node->line_no);
         // 清理已创建的标签
         delete then_label;
-        delete else_actual_label;
+        delete else_label;
         delete end_if_label;
         return false;
     }
@@ -1617,7 +1630,7 @@ bool IRGenerator::ir_if(ast_node * node)
         node->blockInsts.addInst(new GotoInstruction(currentFunc, end_if_label));
 
         // 添加 else_actual_label 标记 else 块的开始
-        node->blockInsts.addInst(else_actual_label);
+        node->blockInsts.addInst(else_label);
 
         // 翻译 else_block
         ast_node * processed_else_node = ir_visit_ast_node(else_node);
@@ -2014,11 +2027,50 @@ bool IRGenerator::ir_array_access(ast_node * node)
     Function * currentFunc = module->getCurrentFunction();
     // 从上一步的结果中拿到地址指针
     Value * address_ptr = node->val;
-    // TODO 该方法待修改，不能直接new value
     Instruction * load_inst = new MoveInstruction(currentFunc, address_ptr);
     node->blockInsts.addInst(load_inst);
 
     node->val = load_inst;
 
     return true;
+}
+
+/// @brief 将一个布尔值(i1)转换成整数(i32)
+/// @param bool_val 需要转换的布尔值
+/// @param current_func 当前函数
+/// @param current_block 当前指令插入点
+/// @return 转换后的i32类型的值
+Value *IRGenerator::promote_bool_to_int(ast_node * node,Value * bool_val)
+{
+    Function * current_func = module->getCurrentFunction();
+    // --- 如果传入的不是布尔值，直接返回 ---
+    if (bool_val->getType() != IntegerType::getTypeBool()) {
+        return bool_val;
+    }
+
+    // 1. 在函数入口块分配一个i32的局部变量
+    LocalVariable * result_var = static_cast<LocalVariable *> (module->newVarValue(IntegerType::getTypeInt()));    // 2. 创建分支所需的基本块
+    LabelInstruction * true_label = new LabelInstruction(current_func);
+    LabelInstruction * false_label = new LabelInstruction(current_func);
+    LabelInstruction * merge_label = new LabelInstruction(current_func);
+
+    BranchInstruction * branch_instr = new BranchInstruction(current_func, bool_val, true_label, false_label);
+    node->blockInsts.addInst(branch_instr);
+
+    // 4. 填充真分支
+    node->blockInsts.addInst(true_label);
+    // 使用 MoveInstruction 将常量 1 赋值给结果变量
+    node->blockInsts.addInst(new MoveInstruction(current_func, result_var, module->newConstInt(1)));
+    node->blockInsts.addInst(new GotoInstruction(current_func, merge_label));
+
+    // 5. 填充假分支
+    node->blockInsts.addInst(false_label);
+    // 使用 MoveInstruction 将常量 0 赋值给结果变量
+    node->blockInsts.addInst(new MoveInstruction(current_func, result_var, module->newConstInt(0)));
+    node->blockInsts.addInst(new GotoInstruction(current_func, merge_label));
+
+    // 6. 填充合并块
+    node->blockInsts.addInst(merge_label);
+
+    return result_var;
 }

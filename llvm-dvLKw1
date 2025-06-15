@@ -1,0 +1,37 @@
+define i32 @main() {
+	%l0 = alloca i32, align 4
+	%l1 = alloca i32, align 4
+	%l2 = alloca i32, align 4
+	store i32 1, i32* %l1, align 4
+	br i1 %t3, label %.L1, label %.L2
+.L1:
+	store i32 1, i32* %l2, align 4
+	br label %.L3
+.L2:
+	store i32 0, i32* %l2, align 4
+	br label %.L3
+.L3:
+	%t6 = load i32, i32* %l1, align 4
+	%t3 = icmp eq i32 %t6, 0
+	%t7 = load i32, i32* %l2, align 4
+	%t4 = add nsw i32 %t7, 0
+	%t5 = icmp ne i32 %t4, 0
+	br i1 %t5, label %.L4, label %.L6
+.L4:
+	store i32 0, i32* %l0, align 4
+	br label %.L6
+.L6:
+	%t8 = load i32, i32* %l0, align 4
+	ret i32 %t8
+}
+declare i32 @getint(...);
+declare i32 @getch(...);
+declare void @putint(i32);
+declare void @putch(i32);
+declare void @putstr(i8*);
+declare i32 @getarray(i32*);
+declare void @putarray(i32, i32*);
+declare float @getfloat(...);
+declare void @putfloat(float);
+declare i32 @getfarray(float*);
+declare void @putfarray(i32, float*);
